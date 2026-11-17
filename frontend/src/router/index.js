@@ -8,6 +8,7 @@ import InspectionTasksView from '../views/InspectionTasksView.vue'
 import SpareView from '../views/SpareView.vue'
 import WorkOrdersView from '../views/WorkOrdersView.vue'
 import MaintenanceView from '../views/MaintenanceView.vue'
+import MessageCenterView from '../views/MessageCenterView.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
@@ -27,6 +28,7 @@ const router = createRouter({
     { path: '/spares', name: 'spares', component: SpareView, meta: { title: '备件台账' } },
     { path: '/work-orders', name: 'work-orders', component: WorkOrdersView, meta: { title: '维修工单' } },
     { path: '/maintenance', name: 'maintenance', component: MaintenanceView, meta: { title: '维保管理' } },
+    { path: '/messages', name: 'messages', component: MessageCenterView, meta: { title: '消息中心' } },
     {
       path: '/about',
       name: 'about',
