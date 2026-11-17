@@ -1,0 +1,8 @@
+{
+  "name": "维检云枢",
+  "appid": "__UNI__WJYS",
+  "description": "维检云枢移动巡检端",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "transformPx": false
+}

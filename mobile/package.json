@@ -1,0 +1,13 @@
+{
+  "name": "wjys-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "uni",
+    "build": "uni build"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "^3.0.0",
+    "vue": "^3.4.21"
+  }
+}
