@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { request } from '../../src/api/http'
+import { pull } from '../../src/api/sync'
+import { syncPending } from '../../src/api/sync'
 import { storageRepository } from '../../src/repositories/storageRepository'
 import { syncQueue } from '../../src/repositories/syncQueue'
 
@@ -13,8 +14,9 @@ async function loadTasks() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const response = await request({ url: '/inspection/tasks?pageNum=1&pageSize=20' })
-    tasks.value = response.data?.records || []
+    const response = await pull(storageRepository.getSyncCursor())
+    tasks.value = response.data?.tasks || []
+    if (response.data?.cursor) storageRepository.setSyncCursor(response.data.cursor)
   } catch (error) {
     errorMessage.value = error.message || '任务加载失败，当前可继续填写离线草稿'
   } finally {
@@ -23,8 +25,14 @@ async function loadTasks() {
   }
 }
 
-function refreshQueue() {
-  uni.showToast({ title: `待同步 ${pendingCount.value} 条`, icon: 'none' })
+async function refreshQueue() {
+  if (!pendingCount.value) { uni.showToast({ title: '暂无待同步记录', icon: 'none' }); return }
+  uni.showLoading({ title: '同步中' })
+  try {
+    const results = await syncPending()
+    const conflicts = results.filter((item) => item.status === 'conflict').length
+    uni.showToast({ title: conflicts ? `${conflicts} 条冲突待处理` : '同步完成', icon: conflicts ? 'none' : 'success' })
+  } catch (error) { uni.showToast({ title: error.message || '同步失败', icon: 'none' }) } finally { uni.hideLoading() }
 }
 
 onMounted(loadTasks)
@@ -39,7 +47,7 @@ onPullDownRefresh(loadTasks)
       <text class="subtitle">在线与离线都可以继续工作</text>
     </view>
     <view class="queue" @click="refreshQueue">
-      <text>离线待同步</text>
+      <text>离线待同步 · 点击同步</text>
       <text class="queue-count">{{ pendingCount }}</text>
     </view>
     <view v-if="loading" class="state">正在加载任务…</view>
