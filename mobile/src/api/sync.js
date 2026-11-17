@@ -1,8 +1,8 @@
 import { request } from './http.js'
 import { syncQueue } from '../repositories/syncQueue.js'
 
-export function pull(lastSyncTime = null, modules = ['inspection', 'messages']) {
-  return request({ url: '/mobile/sync/pull', data: { lastSyncTime, modules: modules.join(',') } })
+export function pull(cursor = null, modules = ['inspection', 'messages']) {
+  return request({ url: '/mobile/sync/pull', data: { cursor, modules: modules.join(',') } })
 }
 
 export function push(items) {

@@ -1,7 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { pull } from '../../src/api/sync'
-import { syncPending } from '../../src/api/sync'
+import { pull, syncPending } from '../../src/api/sync'
 import { storageRepository } from '../../src/repositories/storageRepository'
 import { syncQueue } from '../../src/repositories/syncQueue'
 
