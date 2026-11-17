@@ -2,9 +2,11 @@
   "name": "wjys-mobile",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "uni",
-    "build": "uni build"
+    "build": "uni build",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "^3.0.0",
