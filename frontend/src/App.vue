@@ -29,6 +29,7 @@ async function logout() {
         <RouterLink to="/equipment" class="nav-item"><span class="nav-icon">◇</span><span>设备台账</span></RouterLink>
         <RouterLink to="/inspection/plans" class="nav-item"><span class="nav-icon">◌</span><span>巡检计划</span></RouterLink>
         <RouterLink to="/inspection/tasks" class="nav-item"><span class="nav-icon">◈</span><span>巡检任务</span></RouterLink>
+        <RouterLink to="/spares" class="nav-item"><span class="nav-icon">▦</span><span>备件台账</span></RouterLink>
       </nav>
       <div class="sidebar-foot"><div class="status-dot"></div><span>系统运行正常</span></div>
     </aside>

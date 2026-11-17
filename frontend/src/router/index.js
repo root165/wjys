@@ -5,6 +5,7 @@ import SystemUsersView from '../views/SystemUsersView.vue'
 import EquipmentView from '../views/EquipmentView.vue'
 import InspectionPlansView from '../views/InspectionPlansView.vue'
 import InspectionTasksView from '../views/InspectionTasksView.vue'
+import SpareView from '../views/SpareView.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
@@ -21,6 +22,7 @@ const router = createRouter({
     { path: '/equipment', name: 'equipment', component: EquipmentView, meta: { title: '设备台账' } },
     { path: '/inspection/plans', name: 'inspection-plans', component: InspectionPlansView, meta: { title: '巡检计划' } },
     { path: '/inspection/tasks', name: 'inspection-tasks', component: InspectionTasksView, meta: { title: '巡检任务' } },
+    { path: '/spares', name: 'spares', component: SpareView, meta: { title: '备件台账' } },
     {
       path: '/about',
       name: 'about',
