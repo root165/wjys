@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import * as dashboardApi from '@/api/dashboard'
 
 const loading = ref(false)
+const exporting = ref(false)
 const overview = ref({})
 const trend = ref([])
 const ranking = ref([])
@@ -41,11 +42,22 @@ async function load() {
   } finally { loading.value = false }
 }
 
+async function exportRanking() {
+  exporting.value = true
+  try {
+    const content = await dashboardApi.exportEquipmentRanking({ startDate: rangeStart, endDate: today, topN: 50 })
+    const url = URL.createObjectURL(content)
+    const link = document.createElement('a')
+    link.href = url; link.download = `equipment-ranking-${today}.xlsx`; link.click(); URL.revokeObjectURL(url)
+    ElMessage.success('设备统计已导出')
+  } catch (error) { ElMessage.error(error.message || '统计导出失败') } finally { exporting.value = false }
+}
+
 onMounted(load)
 </script>
 
 <template>
-  <div class="page-intro"><div><h2>现场运维，保持可见。</h2><p>统计分析把设备、巡检、故障和备件状态汇总到同一张运行视图。</p></div><div class="hero-date">{{ today }}</div></div>
+  <div class="page-intro"><div><h2>现场运维，保持可见。</h2><p>统计分析把设备、巡检、故障和备件状态汇总到同一张运行视图。</p></div><div class="dashboard-actions"><span class="hero-date">{{ today }}</span><button class="table-action" type="button" @click="load">刷新</button><button class="primary-button compact-button" type="button" :disabled="exporting" @click="exportRanking">{{ exporting ? '导出中…' : '导出排行' }}</button></div></div>
   <div v-if="loading" class="soft-card empty-state">正在加载统计数据…</div>
   <template v-else>
     <section class="metric-grid"><article v-for="metric in metrics" :key="metric.label" class="soft-card metric-card"><div class="metric-label">{{ metric.label }}</div><div class="metric-value">{{ metric.value }}</div><div class="metric-foot">{{ metric.foot }}</div></article></section>
@@ -55,6 +67,6 @@ onMounted(load)
 </template>
 
 <style scoped>
-.hero-date { color: #739080; font-family: Georgia, serif; font-size: 20px; }.dashboard-grid-wide { grid-template-columns: 1.35fr .65fr; }.trend-list, .ranking-list, .pareto-list { display: grid; gap: 14px; }.trend-row { display: grid; grid-template-columns: 44px 1fr 54px 54px; align-items: center; gap: 10px; color: #768a80; font-size: 12px; }.trend-row strong { color: #3f6854; font-size: 12px; text-align: right; }.trend-row em { color: #ad7546; font-size: 11px; font-style: normal; text-align: right; }.trend-track, .pareto-track { height: 8px; overflow: hidden; border-radius: 99px; background: #eef2ec; }.trend-track i, .pareto-track i { display: block; height: 100%; border-radius: inherit; background: #7caa82; }.quality-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; }.quality-grid div { padding: 18px 8px; border-radius: 12px; background: #f3f7ef; }.quality-grid strong { display: block; color: #2f654e; font-size: 22px; }.quality-grid span { display: block; margin-top: 6px; color: #82948a; font-size: 11px; }.ranking-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid #edf1ed; }.ranking-row:last-child { border: 0; }.ranking-row > b { color: #b1bd8a; font-size: 12px; }.ranking-value { color: #a8663e; font-size: 17px; }.pareto-row > div:first-child { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }.pareto-row strong { color: #315747; font-size: 13px; }.pareto-row span { color: #899a91; font-size: 11px; }.pareto-track i { background: #d19b64; }
-@media (max-width: 900px) { .dashboard-grid-wide { grid-template-columns: 1fr; }.trend-row { grid-template-columns: 38px 1fr 44px; }.trend-row em { display: none; } }
+.dashboard-actions { display: flex; align-items: center; gap: 14px; }.hero-date { color: #739080; font-family: Georgia, serif; font-size: 20px; }.compact-button { width: auto; padding: 0 18px; }.dashboard-grid-wide { grid-template-columns: 1.35fr .65fr; }.trend-list, .ranking-list, .pareto-list { display: grid; gap: 14px; }.trend-row { display: grid; grid-template-columns: 44px 1fr 54px 54px; align-items: center; gap: 10px; color: #768a80; font-size: 12px; }.trend-row strong { color: #3f6854; font-size: 12px; text-align: right; }.trend-row em { color: #ad7546; font-size: 11px; font-style: normal; text-align: right; }.trend-track, .pareto-track { height: 8px; overflow: hidden; border-radius: 99px; background: #eef2ec; }.trend-track i, .pareto-track i { display: block; height: 100%; border-radius: inherit; background: #7caa82; }.quality-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; }.quality-grid div { padding: 18px 8px; border-radius: 12px; background: #f3f7ef; }.quality-grid strong { display: block; color: #2f654e; font-size: 22px; }.quality-grid span { display: block; margin-top: 6px; color: #82948a; font-size: 11px; }.ranking-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid #edf1ed; }.ranking-row:last-child { border: 0; }.ranking-row > b { color: #b1bd8a; font-size: 12px; }.ranking-value { color: #a8663e; font-size: 17px; }.pareto-row > div:first-child { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }.pareto-row strong { color: #315747; font-size: 13px; }.pareto-row span { color: #899a91; font-size: 11px; }.pareto-track i { background: #d19b64; }
+@media (max-width: 900px) { .dashboard-actions { align-items: flex-start; flex-wrap: wrap; }.dashboard-grid-wide { grid-template-columns: 1fr; }.trend-row { grid-template-columns: 38px 1fr 44px; }.trend-row em { display: none; } }
 </style>
