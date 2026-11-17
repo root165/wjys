@@ -9,7 +9,10 @@ function requestHash(payload) {
 }
 
 export const syncQueue = {
-  enqueueInspectionSubmit({ taskId, payload, photoPaths = [] }) {
+  enqueueInspectionSubmit({ taskId, payload, photoPaths = [], photoBindings = [] }) {
+    const bindings = photoBindings.length
+      ? photoBindings.map((item) => ({ taskItemId: item.taskItemId, path: item.path, fileId: item.fileId || null }))
+      : photoPaths.map((path) => ({ taskItemId: null, path, fileId: null }))
     const record = {
       submitNo: payload.submitNo || uuid(),
       bizType: 'inspection_submit',
@@ -19,7 +22,8 @@ export const syncQueue = {
       retryCount: 0,
       status: 'pending',
       payload: { ...payload, submitNo: payload.submitNo || undefined },
-      photoPaths
+      photoPaths,
+      photoBindings: bindings
     }
     record.payload.submitNo = record.submitNo
     storageRepository.setSyncRecord(record)
@@ -42,6 +46,11 @@ export const syncQueue = {
     const record = storageRepository.getSyncRecord(submitNo)
     if (!record) return
     storageRepository.setSyncRecord({ ...record, status: 'conflict', lastError: message })
+  },
+  updatePayload(submitNo, payload, photoBindings) {
+    const record = storageRepository.getSyncRecord(submitNo)
+    if (!record) return
+    storageRepository.setSyncRecord({ ...record, payload, photoBindings })
   },
   async retryAll(push) {
     const records = this.pending().sort((a, b) => a.createdTime.localeCompare(b.createdTime))

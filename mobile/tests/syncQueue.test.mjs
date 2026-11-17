@@ -27,3 +27,23 @@ test('409 conflict remains visible instead of being dropped', async () => {
   assert.deepEqual(results, [{ submitNo: record.submitNo, status: 'conflict' }])
   assert.equal(syncQueue.list().find((item) => item.submitNo === record.submitNo).status, 'conflict')
 })
+
+test('online recovery uploads bound photos before pushing inspection payload', async () => {
+  const { syncPending } = await import('../src/api/sync.js')
+  const record = syncQueue.enqueueInspectionSubmit({
+    taskId: 19,
+    payload: { items: [{ taskItemId: 21, checkResult: 0 }] },
+    photoBindings: [{ taskItemId: 21, path: '/private/inspection.jpg' }],
+  })
+  let uploaded = 0
+  let pushedPayload
+  const results = await syncPending({
+    uploadPhoto: async () => { uploaded += 1; return { data: { fileId: 71 } } },
+    pushBatch: async (items) => { pushedPayload = items[0].payload; return { data: { results: [{ status: 'confirmed' }] } } },
+  })
+  assert.equal(uploaded, 1)
+  assert.deepEqual(pushedPayload.items[0].fileIds, [71])
+  assert.equal(results[0].status, 'confirmed')
+  assert.equal(syncQueue.pending().length, 0)
+  assert.equal(syncQueue.list().find((item) => item.submitNo === record.submitNo).photoBindings[0].fileId, 71)
+})
