@@ -13,6 +13,7 @@ dist
 dist-ssr
 coverage
 *.local
+.tmp-esbuild/
 
 # Editor directories and files
 .vscode/*
