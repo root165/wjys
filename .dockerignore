@@ -1,0 +1,13 @@
+.git
+.idea
+.codex
+.agents
+**/node_modules
+**/target
+**/dist
+**/storage
+docs
+mobile
+*.docx
+*.log
+.env

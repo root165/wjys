@@ -53,6 +53,62 @@ services:
       timeout: 5s
       retries: 10
 
+  backend:
+    image: ${BACKEND_IMAGE:-wjys-backend}:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: deploy/docker/backend.Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-wjys}?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai"
+      DB_USERNAME: ${MYSQL_USER:-wjys}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_ENABLED: "true"
+      MINIO_ENABLED: "true"
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change-minio-password}
+      MINIO_BUCKET: ${MINIO_BUCKET:-wjys}
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-to-a-long-random-value-at-least-32-bytes}
+      QR_SECRET: ${QR_SECRET:-change-this-qr-secret-to-a-long-random-value}
+      SCHEDULING_ENABLED: ${SCHEDULING_ENABLED:-true}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-wjys-frontend}:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: deploy/docker/frontend.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 volumes:
   wjys_mysql_data:
   wjys_redis_data:
