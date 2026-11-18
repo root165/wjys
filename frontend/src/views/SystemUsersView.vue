@@ -7,6 +7,8 @@ const loading = ref(false)
 const users = ref([])
 const keyword = ref('')
 const pagination = reactive({ pageNum: 1, pageSize: 20, total: 0 })
+const formVisible = ref(false)
+const createForm = reactive({ username: '', password: '', nickname: '', deptId: null })
 
 async function loadUsers() {
   loading.value = true
@@ -23,10 +25,19 @@ async function toggle(user) {
   try { await systemApi.changeUserStatus(user.id, nextStatus); ElMessage.success('状态已更新'); await loadUsers() } catch (error) { ElMessage.error(error.message || '状态更新失败') }
 }
 
+async function createUser() {
+  try { await systemApi.createUser({ ...createForm, deptId: createForm.deptId ? Number(createForm.deptId) : null }); ElMessage.success('用户已创建'); Object.assign(createForm, { username: '', password: '', nickname: '', deptId: null }); formVisible.value = false; await loadUsers() } catch (error) { ElMessage.error(error.message || '用户创建失败') }
+}
+
 onMounted(loadUsers)
 </script>
 
 <template>
-  <div class="page-intro"><div><h2>用户管理</h2><p>管理登录账号、部门归属与使用状态。</p></div></div>
+  <div class="page-intro"><div><h2>用户管理</h2><p>管理登录账号、部门归属与使用状态。</p></div><button class="primary-button compact-button" type="button" @click="formVisible = !formVisible">{{ formVisible ? '收起新增' : '新增用户' }}</button></div>
+  <section v-if="formVisible" class="soft-card panel"><form class="user-form" @submit.prevent="createUser"><input v-model="createForm.username" class="form-input" required placeholder="用户名" /><input v-model="createForm.password" class="form-input" type="password" minlength="8" required placeholder="初始密码（至少 8 位）" /><input v-model="createForm.nickname" class="form-input" required placeholder="姓名" /><input v-model="createForm.deptId" class="form-input" type="number" min="1" placeholder="部门 ID（可空）" /><button class="primary-button compact-button" type="submit">保存用户</button></form></section>
   <section class="soft-card table-card"><div class="toolbar"><input v-model="keyword" class="form-input" placeholder="搜索用户名或姓名" @keyup.enter="loadUsers" /><button class="primary-button" style="width: auto; padding: 0 20px" type="button" @click="loadUsers">查询</button></div><div v-if="loading" class="empty-state">正在加载用户数据…</div><div v-else-if="!users.length" class="empty-state">暂无用户数据</div><div v-else class="table-wrap"><table class="data-table"><thead><tr><th>用户名</th><th>姓名</th><th>部门</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="user in users" :key="user.id"><td><strong>{{ user.username }}</strong></td><td>{{ user.nickname }}</td><td>{{ user.deptId ? `部门 #${user.deptId}` : '未分配' }}</td><td><span class="state-pill" :class="user.status === 1 ? 'active' : 'inactive'">{{ user.status === 1 ? '启用' : '停用' }}</span></td><td><button class="table-action" type="button" @click="toggle(user)">{{ user.status === 1 ? '停用' : '启用' }}</button></td></tr></tbody></table></div></section>
 </template>
+
+<style scoped>
+.compact-button { width: auto; padding: 0 18px; }.user-form { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 10px; align-items: center; }@media (max-width: 800px) { .user-form { grid-template-columns: repeat(2, 1fr); } }@media (max-width: 600px) { .user-form { grid-template-columns: 1fr; } }
+</style>
