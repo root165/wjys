@@ -10,3 +10,5 @@ export const updateEquipmentParam = (equipmentId, paramId, payload) => http.put(
 export const getEquipmentQr = (id) => http.get(`/equipment/equipments/${id}/qrcode`, { responseType: 'blob' })
 export const getCategories = () => http.get('/equipment/categories')
 export const createCategory = (payload) => http.post('/equipment/categories', payload)
+export const updateCategory = (id, payload) => http.put(`/equipment/categories/${id}`, payload)
+export const deleteCategory = (id) => http.delete(`/equipment/categories/${id}`)
