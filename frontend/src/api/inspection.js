@@ -1,8 +1,15 @@
 import http from './http'
 
 export const getPlans = () => http.get('/inspection/plans')
+export const createPlan = (payload) => http.post('/inspection/plans', payload)
 export const changePlanStatus = (id, status) => http.put(`/inspection/plans/${id}/status`, { status })
 export const generateTask = (id, planTime) => http.post(`/inspection/plans/${id}/generate`, { planTime })
 export const getTasks = (params) => http.get('/inspection/tasks', { params })
 export const receiveTask = (id) => http.put(`/inspection/tasks/${id}/receive`)
 export const getTask = (id) => http.get(`/inspection/tasks/${id}`)
+export const getPoints = () => http.get('/inspection/points')
+export const createPoint = (payload) => http.post('/inspection/points', payload)
+export const getItems = (pointId) => http.get('/inspection/items', { params: pointId ? { pointId } : {} })
+export const createItem = (payload) => http.post('/inspection/items', payload)
+export const getAbnormals = (status) => http.get('/inspection/abnormals', { params: status === '' ? {} : { status } })
+export const createRepairFromAbnormal = (id) => http.post(`/inspection/abnormals/${id}/to-repair`)

@@ -26,9 +26,12 @@ async function logout() {
         <RouterLink to="/" class="nav-item"><span class="nav-icon">⌂</span><span>工作台</span></RouterLink>
         <p class="nav-label">系统设置</p>
         <RouterLink to="/system/users" class="nav-item"><span class="nav-icon">◎</span><span>用户管理</span></RouterLink>
+        <RouterLink to="/system/settings" class="nav-item"><span class="nav-icon">⚙</span><span>系统配置</span></RouterLink>
         <RouterLink to="/equipment" class="nav-item"><span class="nav-icon">◇</span><span>设备台账</span></RouterLink>
         <RouterLink to="/inspection/plans" class="nav-item"><span class="nav-icon">◌</span><span>巡检计划</span></RouterLink>
+        <RouterLink to="/inspection/config" class="nav-item"><span class="nav-icon">⌁</span><span>巡检配置</span></RouterLink>
         <RouterLink to="/inspection/tasks" class="nav-item"><span class="nav-icon">◈</span><span>巡检任务</span></RouterLink>
+        <RouterLink to="/inspection/abnormals" class="nav-item"><span class="nav-icon">!</span><span>异常管理</span></RouterLink>
         <RouterLink to="/spares" class="nav-item"><span class="nav-icon">▦</span><span>备件台账</span></RouterLink>
         <RouterLink to="/work-orders" class="nav-item"><span class="nav-icon">↺</span><span>维修工单</span></RouterLink>
         <RouterLink to="/maintenance" class="nav-item"><span class="nav-icon">◫</span><span>维保管理</span></RouterLink>

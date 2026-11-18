@@ -9,6 +9,9 @@ import SpareView from '../views/SpareView.vue'
 import WorkOrdersView from '../views/WorkOrdersView.vue'
 import MaintenanceView from '../views/MaintenanceView.vue'
 import MessageCenterView from '../views/MessageCenterView.vue'
+import SystemSettingsView from '../views/SystemSettingsView.vue'
+import InspectionConfigView from '../views/InspectionConfigView.vue'
+import AbnormalView from '../views/AbnormalView.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
@@ -22,9 +25,12 @@ const router = createRouter({
     },
     { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
     { path: '/system/users', name: 'system-users', component: SystemUsersView, meta: { title: '用户管理' } },
+    { path: '/system/settings', name: 'system-settings', component: SystemSettingsView, meta: { title: '系统配置' } },
     { path: '/equipment', name: 'equipment', component: EquipmentView, meta: { title: '设备台账' } },
     { path: '/inspection/plans', name: 'inspection-plans', component: InspectionPlansView, meta: { title: '巡检计划' } },
+    { path: '/inspection/config', name: 'inspection-config', component: InspectionConfigView, meta: { title: '巡检配置' } },
     { path: '/inspection/tasks', name: 'inspection-tasks', component: InspectionTasksView, meta: { title: '巡检任务' } },
+    { path: '/inspection/abnormals', name: 'inspection-abnormals', component: AbnormalView, meta: { title: '异常管理' } },
     { path: '/spares', name: 'spares', component: SpareView, meta: { title: '备件台账' } },
     { path: '/work-orders', name: 'work-orders', component: WorkOrdersView, meta: { title: '维修工单' } },
     { path: '/maintenance', name: 'maintenance', component: MaintenanceView, meta: { title: '维保管理' } },
