@@ -4,6 +4,8 @@ const SYNC_PREFIX = 'wjys:sync:v1:'
 const DRAFT_PREFIX = 'wjys:draft:v1:'
 const PHOTO_PREFIX = 'wjys:photo:v1:'
 const SYNC_CURSOR_KEY = 'wjys:sync:v1:cursor'
+const TASK_PREFIX = 'wjys:task:v1:'
+const PHOTO_INDEX_KEY = 'wjys:photo:v1:index'
 const STORAGE_WARN_BYTES = 8 * 1024 * 1024
 
 function read(key, fallback = null) {
@@ -31,7 +33,7 @@ function write(key, value) {
 }
 
 export const storageRepository = {
-  keys: { AUTH_KEY, SYNC_INDEX_KEY, SYNC_PREFIX, DRAFT_PREFIX, PHOTO_PREFIX, SYNC_CURSOR_KEY },
+  keys: { AUTH_KEY, SYNC_INDEX_KEY, SYNC_PREFIX, DRAFT_PREFIX, PHOTO_PREFIX, SYNC_CURSOR_KEY, TASK_PREFIX, PHOTO_INDEX_KEY },
   get(key, fallback = null) { return read(key, fallback) },
   set(key, value) { write(key, value) },
   remove(key) { uni.removeStorageSync(key) },
@@ -42,10 +44,18 @@ export const storageRepository = {
   },
   getAuth() { return read(AUTH_KEY, {}) },
   setAuth(value) { write(AUTH_KEY, value) },
+  clearAuth() { uni.removeStorageSync(AUTH_KEY) },
   getSyncIndex() { return read(SYNC_INDEX_KEY, []) },
   setSyncIndex(value) { write(SYNC_INDEX_KEY, value) },
   getSyncCursor() { return read(SYNC_CURSOR_KEY, null) },
   setSyncCursor(value) { write(SYNC_CURSOR_KEY, value) },
+  getDraft(taskId) { return read(`${DRAFT_PREFIX}${taskId}`, {}) },
+  setDraft(taskId, value) { write(`${DRAFT_PREFIX}${taskId}`, value) },
+  removeDraft(taskId) { uni.removeStorageSync(`${DRAFT_PREFIX}${taskId}`) },
+  setTask(task) { write(`${TASK_PREFIX}${task.id}`, task) },
+  getTask(taskId) { return read(`${TASK_PREFIX}${taskId}`, null) },
+  setPhotoIndex(value) { write(PHOTO_INDEX_KEY, value) },
+  getPhotoIndex() { return read(PHOTO_INDEX_KEY, []) },
   syncKey(submitNo) { return `${SYNC_PREFIX}${submitNo}` },
   draftKey(taskId) { return `${DRAFT_PREFIX}${taskId}` },
   photoKey(taskItemId) { return `${PHOTO_PREFIX}${taskItemId}` },

@@ -4,12 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "uni",
-    "build": "uni build",
+    "dev": "node scripts/uni-cli.mjs",
+    "dev:h5": "node scripts/uni-cli.mjs -p h5",
+    "dev:app": "node scripts/uni-cli.mjs -p app",
+    "build": "node scripts/uni-cli.mjs build -p app",
+    "build:h5": "node scripts/uni-cli.mjs build -p h5",
+    "build:app": "node scripts/uni-cli.mjs build -p app",
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
-    "@dcloudio/uni-app": "^3.0.0",
-    "vue": "^3.4.21"
+    "@dcloudio/uni-app": "3.0.0-alpha-5030720261117001",
+    "vue": "3.4.21"
+  },
+  "devDependencies": {
+    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5030720261117001",
+    "vite": "5.2.8"
   }
 }

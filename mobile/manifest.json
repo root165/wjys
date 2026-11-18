@@ -4,5 +4,17 @@
   "description": "维检云枢移动巡检端",
   "versionName": "0.1.0",
   "versionCode": "100",
-  "transformPx": false
+  "transformPx": false,
+  "app-plus": {
+    "usingComponents": true,
+    "distribute": {
+      "android": {
+        "permissions": [
+          "android.permission.CAMERA",
+          "android.permission.READ_MEDIA_IMAGES",
+          "android.permission.READ_EXTERNAL_STORAGE"
+        ]
+      }
+    }
+  }
 }

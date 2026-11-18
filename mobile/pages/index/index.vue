@@ -1,20 +1,27 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { pull, syncPending } from '../../src/api/sync'
+import { logout } from '../../src/api/auth.js'
 import { storageRepository } from '../../src/repositories/storageRepository'
 import { syncQueue } from '../../src/repositories/syncQueue'
 
 const tasks = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
-const pendingCount = computed(() => syncQueue.pending().length)
+const queueVersion = ref(0)
+const pendingCount = computed(() => { queueVersion.value; return syncQueue.pending().length })
 
 async function loadTasks() {
+  if (!storageRepository.getAuth()?.accessToken) {
+    uni.reLaunch({ url: '/pages/login/login' })
+    return
+  }
   loading.value = true
   errorMessage.value = ''
   try {
     const response = await pull(storageRepository.getSyncCursor())
     tasks.value = response.data?.tasks || []
+    tasks.value.forEach((task) => storageRepository.setTask(task))
     if (response.data?.cursor) storageRepository.setSyncCursor(response.data.cursor)
   } catch (error) {
     errorMessage.value = error.message || '任务加载失败，当前可继续填写离线草稿'
@@ -24,11 +31,26 @@ async function loadTasks() {
   }
 }
 
+function openTask(task) {
+  uni.navigateTo({ url: `/pages/task/detail?id=${task.id}` })
+}
+
+function openMessages() {
+  uni.navigateTo({ url: '/pages/messages/index' })
+}
+
+async function signOut() {
+  try { await logout() } catch (error) { /* 令牌失效时仍清理本地会话 */ }
+  storageRepository.clearAuth()
+  uni.reLaunch({ url: '/pages/login/login' })
+}
+
 async function refreshQueue() {
   if (!pendingCount.value) { uni.showToast({ title: '暂无待同步记录', icon: 'none' }); return }
   uni.showLoading({ title: '同步中' })
   try {
     const results = await syncPending()
+    queueVersion.value += 1
     const conflicts = results.filter((item) => item.status === 'conflict').length
     uni.showToast({ title: conflicts ? `${conflicts} 条冲突待处理` : '同步完成', icon: conflicts ? 'none' : 'success' })
   } catch (error) { uni.showToast({ title: error.message || '同步失败', icon: 'none' }) } finally { uni.hideLoading() }
@@ -49,10 +71,14 @@ onPullDownRefresh(loadTasks)
       <text>离线待同步 · 点击同步</text>
       <text class="queue-count">{{ pendingCount }}</text>
     </view>
+    <view class="actions">
+      <button size="mini" @click="openMessages">消息中心</button>
+      <button size="mini" @click="signOut">退出登录</button>
+    </view>
     <view v-if="loading" class="state">正在加载任务…</view>
     <view v-else-if="errorMessage" class="state error">{{ errorMessage }}</view>
     <view v-else-if="!tasks.length" class="state">暂无巡检任务</view>
-    <view v-for="task in tasks" :key="task.id" class="task-card">
+    <view v-for="task in tasks" :key="task.id" class="task-card" @click="openTask(task)">
       <text class="task-no">{{ task.taskNo }}</text>
       <text class="task-name">计划日期 {{ task.planTime }}</text>
       <text class="task-status">状态 {{ task.status }}</text>
@@ -68,6 +94,8 @@ onPullDownRefresh(loadTasks)
 .subtitle { display: block; margin-top: 12rpx; color: #64748b; font-size: 28rpx; }
 .queue, .task-card { margin-bottom: 22rpx; padding: 30rpx; border-radius: 24rpx; background: #fff; box-shadow: 0 12rpx 36rpx rgba(15, 23, 42, .06); }
 .queue { display: flex; justify-content: space-between; align-items: center; color: #334155; }
+.actions { display: flex; justify-content: space-between; margin-bottom: 22rpx; }
+.actions button { margin: 0; color: #2563eb; background: #eff6ff; }
 .queue-count { color: #2563eb; font-size: 42rpx; font-weight: 700; }
 .task-no, .task-name, .task-status { display: block; }
 .task-no { font-weight: 700; }
