@@ -1,0 +1,57 @@
+{
+  "title": "测试逻辑架构",
+  "purpose": "测试",
+  "diagram_type": "logical_architecture",
+  "viewpoint": "logical",
+  "notation": "layered_architecture",
+  "visual_style": {
+    "palette": "monochrome",
+    "background": "#FFFFFF",
+    "foreground": "#111111",
+    "fills": [
+      "#FFFFFF",
+      "#F2F2F2"
+    ],
+    "color_usage": "none"
+  },
+  "source_requirements": [
+    "T"
+  ],
+  "nodes": [
+    {
+      "id": "ui",
+      "type": "layer",
+      "label": "用户层",
+      "source_requirement": "T"
+    },
+    {
+      "id": "svc",
+      "type": "component",
+      "label": "业务组件",
+      "source_requirement": "T"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "数据层",
+      "source_requirement": "T"
+    },
+    {
+      "id": "srv",
+      "type": "node",
+      "label": "ECS",
+      "source_requirement": "T"
+    }
+  ],
+  "edges": [
+    {
+      "from": "ui",
+      "to": "svc"
+    },
+    {
+      "from": "svc",
+      "to": "db"
+    }
+  ],
+  "semantic_level": "architecture"
+}

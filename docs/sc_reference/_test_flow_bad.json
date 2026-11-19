@@ -1,0 +1,78 @@
+{
+  "title": "测试跨职能流程",
+  "purpose": "测试",
+  "diagram_type": "business_flow",
+  "flow_variant": "basic",
+  "notation": "bpmn_2_0_2",
+  "visual_style": {
+    "palette": "monochrome",
+    "background": "#FFFFFF",
+    "foreground": "#111111",
+    "fills": [
+      "#FFFFFF",
+      "#F2F2F2"
+    ],
+    "color_usage": "none"
+  },
+  "source_requirements": [
+    "T"
+  ],
+  "lanes": [
+    {
+      "id": "sales",
+      "label": "销售"
+    },
+    {
+      "id": "finance",
+      "label": "财务"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "s",
+      "type": "start",
+      "label": "开始",
+      "lane": "sales",
+      "source_requirement": "T"
+    },
+    {
+      "id": "a",
+      "type": "activity",
+      "label": "提交申请",
+      "lane": "sales",
+      "source_requirement": "T"
+    },
+    {
+      "id": "d",
+      "type": "decision",
+      "label": "审批",
+      "lane": "finance",
+      "source_requirement": "T"
+    },
+    {
+      "id": "e",
+      "type": "end",
+      "label": "结束",
+      "lane": "finance",
+      "source_requirement": "T"
+    }
+  ],
+  "edges": [
+    {
+      "from": "s",
+      "to": "a",
+      "label": "发起"
+    },
+    {
+      "from": "a",
+      "to": "d",
+      "label": "提交"
+    },
+    {
+      "from": "d",
+      "to": "e",
+      "label": "通过"
+    }
+  ],
+  "semantic_level": "business_process"
+}

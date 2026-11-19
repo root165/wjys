@@ -12,6 +12,7 @@ import MessageCenterView from '../views/MessageCenterView.vue'
 import SystemSettingsView from '../views/SystemSettingsView.vue'
 import InspectionConfigView from '../views/InspectionConfigView.vue'
 import AbnormalView from '../views/AbnormalView.vue'
+import ProfileView from '../views/ProfileView.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
@@ -20,21 +21,22 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      meta: { title: '工作台' },
+      meta: { title: '工作台', permission: 'dashboard:view' },
       component: HomeView,
     },
     { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
-    { path: '/system/users', name: 'system-users', component: SystemUsersView, meta: { title: '用户管理' } },
-    { path: '/system/settings', name: 'system-settings', component: SystemSettingsView, meta: { title: '系统配置' } },
-    { path: '/equipment', name: 'equipment', component: EquipmentView, meta: { title: '设备台账' } },
-    { path: '/inspection/plans', name: 'inspection-plans', component: InspectionPlansView, meta: { title: '巡检计划' } },
-    { path: '/inspection/config', name: 'inspection-config', component: InspectionConfigView, meta: { title: '巡检配置' } },
-    { path: '/inspection/tasks', name: 'inspection-tasks', component: InspectionTasksView, meta: { title: '巡检任务' } },
-    { path: '/inspection/abnormals', name: 'inspection-abnormals', component: AbnormalView, meta: { title: '异常管理' } },
-    { path: '/spares', name: 'spares', component: SpareView, meta: { title: '备件台账' } },
-    { path: '/work-orders', name: 'work-orders', component: WorkOrdersView, meta: { title: '维修工单' } },
-    { path: '/maintenance', name: 'maintenance', component: MaintenanceView, meta: { title: '维保管理' } },
-    { path: '/messages', name: 'messages', component: MessageCenterView, meta: { title: '消息中心' } },
+    { path: '/system/users', name: 'system-users', component: SystemUsersView, meta: { title: '用户管理', permission: 'system:user:list' } },
+    { path: '/system/settings', name: 'system-settings', component: SystemSettingsView, meta: { title: '系统配置', permission: 'system:config:view' } },
+    { path: '/equipment', name: 'equipment', component: EquipmentView, meta: { title: '设备台账', permission: 'equipment:view' } },
+    { path: '/inspection/plans', name: 'inspection-plans', component: InspectionPlansView, meta: { title: '巡检计划', permission: 'inspection:plan:view' } },
+    { path: '/inspection/config', name: 'inspection-config', component: InspectionConfigView, meta: { title: '巡检配置', permission: 'inspection:config:view' } },
+    { path: '/inspection/tasks', name: 'inspection-tasks', component: InspectionTasksView, meta: { title: '巡检任务', permission: 'inspection:task:view' } },
+    { path: '/inspection/abnormals', name: 'inspection-abnormals', component: AbnormalView, meta: { title: '异常管理', permission: 'inspection:abnormal:view' } },
+    { path: '/spares', name: 'spares', component: SpareView, meta: { title: '备件台账', permission: 'spare:view' } },
+    { path: '/work-orders', name: 'work-orders', component: WorkOrdersView, meta: { title: '维修工单', permission: 'repair:view' } },
+    { path: '/maintenance', name: 'maintenance', component: MaintenanceView, meta: { title: '维保管理', permission: 'maintenance:view' } },
+    { path: '/messages', name: 'messages', component: MessageCenterView, meta: { title: '消息中心', permission: 'message:view' } },
+    { path: '/profile', name: 'profile', component: ProfileView, meta: { title: '个人资料' } },
     {
       path: '/about',
       name: 'about',
@@ -46,10 +48,14 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (to.meta.public) return true
   if (!auth.isAuthenticated) return { name: 'login', query: { redirect: to.fullPath } }
+  if (!auth.user?.permissions) {
+    try { await auth.loadInfo() } catch { auth.clear(); return { name: 'login', query: { redirect: to.fullPath } } }
+  }
+  if (to.meta.permission && !auth.hasPermission(to.meta.permission)) return { name: 'home' }
   return true
 })
 

@@ -47,3 +47,10 @@ test('online recovery uploads bound photos before pushing inspection payload', a
   assert.equal(syncQueue.pending().length, 0)
   assert.equal(syncQueue.list().find((item) => item.submitNo === record.submitNo).photoBindings[0].fileId, 71)
 })
+
+test('cached tasks can be recovered after an offline restart', async () => {
+  const { storageRepository } = await import('../src/repositories/storageRepository.js')
+  storageRepository.setTask({ id: 301, planTime: '2026-11-19', taskNo: 'INS-301' })
+  storageRepository.setTask({ id: 302, planTime: '2026-11-18', taskNo: 'INS-302' })
+  assert.deepEqual(storageRepository.getTasks().map((item) => item.id), [302, 301])
+})

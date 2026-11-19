@@ -4,7 +4,6 @@ import path from 'node:path'
 const binary = path.join(process.cwd(), 'node_modules', '@dcloudio', 'vite-plugin-uni', 'bin', 'uni.js')
 const result = spawnSync(process.execPath, [binary, ...process.argv.slice(2)], {
   stdio: 'inherit',
-  env: { ...process.env, UNI_INPUT_DIR: process.cwd() },
 })
 
 if (result.error) {

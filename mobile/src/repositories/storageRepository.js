@@ -6,6 +6,7 @@ const PHOTO_PREFIX = 'wjys:photo:v1:'
 const SYNC_CURSOR_KEY = 'wjys:sync:v1:cursor'
 const TASK_PREFIX = 'wjys:task:v1:'
 const PHOTO_INDEX_KEY = 'wjys:photo:v1:index'
+const MESSAGE_CACHE_KEY = 'wjys:message:v1:list'
 const STORAGE_WARN_BYTES = 8 * 1024 * 1024
 
 function read(key, fallback = null) {
@@ -33,7 +34,7 @@ function write(key, value) {
 }
 
 export const storageRepository = {
-  keys: { AUTH_KEY, SYNC_INDEX_KEY, SYNC_PREFIX, DRAFT_PREFIX, PHOTO_PREFIX, SYNC_CURSOR_KEY, TASK_PREFIX, PHOTO_INDEX_KEY },
+  keys: { AUTH_KEY, SYNC_INDEX_KEY, SYNC_PREFIX, DRAFT_PREFIX, PHOTO_PREFIX, SYNC_CURSOR_KEY, TASK_PREFIX, PHOTO_INDEX_KEY, MESSAGE_CACHE_KEY },
   get(key, fallback = null) { return read(key, fallback) },
   set(key, value) { write(key, value) },
   remove(key) { uni.removeStorageSync(key) },
@@ -54,6 +55,22 @@ export const storageRepository = {
   removeDraft(taskId) { uni.removeStorageSync(`${DRAFT_PREFIX}${taskId}`) },
   setTask(task) { write(`${TASK_PREFIX}${task.id}`, task) },
   getTask(taskId) { return read(`${TASK_PREFIX}${taskId}`, null) },
+  getTasks() {
+    return uni.getStorageInfoSync().keys
+      .filter((key) => key.startsWith(TASK_PREFIX))
+      .map((key) => read(key, null))
+      .filter(Boolean)
+      .sort((a, b) => String(a.planTime).localeCompare(String(b.planTime)) || Number(a.id) - Number(b.id))
+  },
+  getMessages() { return read(MESSAGE_CACHE_KEY, []) },
+  setMessages(messages) { write(MESSAGE_CACHE_KEY, messages) },
+  mergeMessages(messages) {
+    const merged = new Map(this.getMessages().map((item) => [String(item.id), item]))
+    messages.forEach((item) => merged.set(String(item.id), item))
+    const sorted = [...merged.values()].sort((a, b) => String(b.createdTime).localeCompare(String(a.createdTime)) || Number(b.id) - Number(a.id))
+    this.setMessages(sorted)
+    return sorted
+  },
   setPhotoIndex(value) { write(PHOTO_INDEX_KEY, value) },
   getPhotoIndex() { return read(PHOTO_INDEX_KEY, []) },
   syncKey(submitNo) { return `${SYNC_PREFIX}${submitNo}` },

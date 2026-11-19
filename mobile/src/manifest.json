@@ -1,0 +1,26 @@
+{
+    "name" : "维检云枢",
+    "appid" : "__UNI__19927E5",
+    "description" : "维检云枢移动巡检端",
+    "versionName" : "1.0.0",
+    "versionCode" : "101",
+    "app-plus" : {
+        "usingComponents" : true,
+        "distribute" : {
+            "android" : {
+                "packagename" : "com.wjys.inspection",
+                "permissions" : [
+                    "<uses-permission android:name=\"android.permission.CAMERA\"/>",
+                    "<uses-permission android:name=\"android.permission.READ_MEDIA_IMAGES\"/>",
+                    "<uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\"/>"
+                ],
+                "minSdkVersion" : 26
+            },
+            "ios" : {
+                "dSYMs" : false
+            }
+        }
+    },
+    "locale" : "zh-Hans",
+    "fallbackLocale" : "zh-Hans"
+}
