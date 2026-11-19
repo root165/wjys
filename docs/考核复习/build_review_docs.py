@@ -153,8 +153,8 @@ SPECS = [
             ["巡检计划", "POST /api/inspection/plans；PUT /api/inspection/plans/{id}", "CreatePlanRequest/UpdatePlanRequest：planCode、planName、cycleType、cycleValue、startDate、endDate、executeTime、assignmentMode、responsibleUserId、assignmentDeptId、pointIds 等", "校验周期、点位、派发对象；写 ins_plan/ins_plan_point；返回 PlanVO"],
             ["生成/领取", "POST /api/inspection/plans/{id}/generate；PUT /api/inspection/tasks/{id}/receive", "生成体 GenerateTaskRequest：planTime；领取仅路径 taskId", "写 ins_task 和 ins_task_item 快照；领取条件更新 0->1，返回 TaskVO"],
             ["提交巡检", "POST /api/inspection/tasks/{id}/submit", "TaskSubmitRequest：submitNo、clientSubmitTime、offlineFlag、items；SubmitItemRequest：taskItemId、checkResult、checkValue、remark、checkTime、fileIds", "校验执行人/完整项/必拍/扫码/幂等；写任务项、异常、提交哈希、文件绑定；返回 TaskSubmitVO"],
-            ["移动同步", "GET /api/mobile/sync/pull；POST /api/mobile/sync/push；PUT /api/mobile/messages/{id}/read", "pull：cursor、lastSyncTime、modules；push：含固定 submitNo 的批次项目；read 仅路径消息 ID", "pull 返回快照增量和 cursor；push 每条 confirmed/conflict/rejected/retry，单条失败不阻断其它项"],
-            ["看板/导出", "GET /api/dashboard/overview、trend、pareto、ranking；导出接口", "分类、开始/结束日期、维度、topN 等查询参数", "返回 Dashboard*VO；日期范围最长365天，缓存10分钟，导出为 XLSX"],
+            ["移动同步", "GET /api/mobile/sync/pull；POST /api/mobile/sync/push；PUT /api/mobile/messages/{id}/read", "pull：cursor、lastSyncTime、modules；push 为 MobileSyncPushRequest.items，单项 MobileSyncPushItem：taskId、payload(TaskSubmitRequest，含固定 submitNo)；read 仅路径消息 ID", "pull 返回任务/消息增量和 cursor；push 返回 MobileSyncPushVO.results，每项为 confirmed/conflict/rejected/retry，单条失败不阻断其它项"],
+            ["看板/导出", "GET /api/dashboard/overview、/fault/pareto、/equipment/ranking、/inspection/summary、/trend、/export/equipment", "overview 可选 categoryId；pareto 为 startDate、endDate、dimension；ranking/导出为 startDate、endDate、categoryId、topN；summary/trend 为 startDate、endDate", "返回 DashboardOverviewVO、FaultParetoVO、EquipmentRankingVO、InspectionSummaryVO 或 DailyTrendVO；导出返回 XLSX"],
         ],
         "calls": [
             ["M01 -> 全模块", "AuthService/JWT 提供身份；Controller 的 @PreAuthorize 执行接口授权；RoleService 的菜单关系驱动 Web 路由和按钮展示。"],
