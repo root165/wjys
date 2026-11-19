@@ -370,13 +370,46 @@ def add_public_system_section(doc):
     doc.add_paragraph('流程二 维保到归档：M05 提交 mt_record 和文件绑定 -> 调用 M02 状态服务进入保养中 -> 审核通过推进 mt_plan.next_date 并归档只读，退回后可重提 -> 发现异常时 M05 调用 M04 RepairService.createFromMaintenance。')
     doc.add_paragraph('流程三 工单到备件成本：M04 工单进入允许领用状态 -> M06 SpareConsumptionService 校验工单、备件和数量 -> SQL 条件扣减 wo_spare.stock_qty -> 写 wo_spare_record -> 汇总写 wo_order.spare_cost；撤销通过反向流水回补，不删除历史。')
     doc.add_paragraph('流程四 移动离线：M08 pull 获取任务/消息快照和 cursor -> 页面写草稿和固定 submitNo 队列 -> 照片先留私有目录 -> 联网上传绑定 fileId -> push 逐条复用 M03 提交服务 -> confirmed 清理、409 冲突交人工、网络/5xx 退避。')
-    doc.add_paragraph('A.4 公共架构 数据库与异常处理能力', style='Heading 2')
-    add_table(doc, [['考察点', '系统实现与可直接回答'],
-        ['分层架构', '用户层为 Vue Web 与 UniApp；接入层为 Controller、JWT、@Valid、@PreAuthorize、ApiResponse；业务层为 Service、状态机和 @Transactional；数据层为 Mapper、MySQL/Flyway、Redis/内存 TTL、对象文件元数据。DTO 负责请求校验，VO 负责输出，Entity 不直接做接口入出参。'],
-        ['核心数据库设计', 'eq_equipment 以 equip_code 唯一、status/deleted/version 管生命周期；ins_task 用 (plan_id,plan_time) 与 submit_no 双唯一并配 ins_task_item 快照；wo_repair 以 (source_type,source_id) 唯一，wo_order 以 repair_id 唯一；mt_record 用 (plan_id,maintain_date) 唯一；wo_spare_record 为不可删除流水；stat_equip_daily 用 (stat_date,equip_id) 唯一日聚合。'],
-        ['并发与事务', '状态流转带旧状态条件，库存扣减带 stock_qty>=quantity 条件；影响行数非1返回409。巡检提交、验收、维保审核、备件领用都以 @Transactional 包住跨表写入，失败整体回滚。'],
-        ['接口输入输出', '统一 /api、JSON camelCase、ApiResponse(code/message/data/traceId)。列表为 pageNum/pageSize 与 PageResult。400 参数错误，401 未认证，403 无权限，404 不存在，409 幂等冲突/唯一冲突/非法状态/并发冲突。'],
-        ['安全与可靠性', 'BCrypt、JWT 刷新轮换、tokenVersion 失效旧 Token、RBAC 加数据范围、操作日志；Redis token 锁加数据库唯一键双保险；文件先上传再绑定，移动端重试沿用 submitNo。']])
+    add_table(doc, [['状态机', '正常路径 责任人变化 分支路径'],
+        ['巡检任务 ins_task', '待领取 -> 已领取 -> 已完成；巡检员领取后才成为 assignee。领取冲突或已完成/已取消时409；提交时异常明细写 ins_abnormal，后续由管理员或维修流程跟踪。'],
+        ['维修工单 wo_order', '待受理 -> 已派工 -> 维修中 -> 待验收 -> 已完成；设备管理员受理/派工，维修工接单/完工，设备管理员验收。验收退回转维修处理，报废设备和非法跳转均拒绝。'],
+        ['维保记录 mt_record', '待审核 -> 已归档，或待审核 -> 已退回 -> 修正后待审核；维保人员提交，设备管理员审核。归档后只读，退回记录可重提；异常可创建 M04 报修。']])
+    doc.add_paragraph('A.4 公共接口与输入输出设计能力', style='Heading 2')
+    doc.add_paragraph('可直接回答：接口不是只报路径。要按“输入字段 -> 参数、权限、状态校验 -> Service 调用和写表 -> 成功输出 -> 失败状态码”说明。以巡检提交为例，以下是完整闭环。')
+    add_table(doc, [['环节', '巡检提交的具体答案'],
+        ['路径与输入', 'POST /api/inspection/tasks/{taskId}/submit；路径 taskId；TaskSubmitRequest 含 submitNo、clientSubmitTime、offlineFlag、items。每个 SubmitItemRequest 含 taskItemId、checkResult、checkValue、remark、checkTime、fileIds。'],
+        ['校验与处理', 'Controller 用 @Valid 和 @PreAuthorize；TaskSubmitService 校验任务存在、执行人、RECEIVED/OVERDUE 状态、submitNo 与 submitHash、明细完整且不重复、检查值范围、必拍照片和异常说明。随后更新 ins_task_item、插入 ins_abnormal、绑定文件，并用旧状态条件更新 ins_task。'],
+        ['输出与异常', '成功返回 ApiResponse<TaskSubmitVO>，含 taskId、taskNo、COMPLETED、abnormalCount、replayed。参数错误400；未认证401；非执行人403；任务不存在404；同号不同内容、状态已变化、并发领取或重复提交409；网络或5xx 时移动端保留同一 submitNo 队列重试。']])
+    doc.add_paragraph('A.5 数据库设计能力 三张核心表与关系', style='Heading 2')
+    add_table(doc, [['核心表', '关键字段与为什么这样设计', '关系与可直接回答'],
+        ['eq_equipment', 'id、equip_code 唯一、category_id、status、responsible_user_id、deleted、version。设备是巡检、报修、维修、维保的关联中心；deleted 保留历史，version 与旧状态条件共同防并发。', '一台设备对应多个 ins_task、wo_repair/wo_order、mt_record 和 eq_status_log；其它模块不得直接改 status，必须调用 EquipmentStatusService。'],
+        ['ins_task 与 ins_task_item', 'ins_task 保存 plan_id、plan_time、assignee_id、status、submit_no、submit_hash、abnormal_count；(plan_id,plan_time) 防重复生成，submit_no 防重复提交。ins_task_item 保存检查项的阈值、单位、必拍和结果快照。', '一个计划生成多次任务；一任务有多项快照；提交异常由 ins_abnormal 关联 task_id/task_item_id/equip_id。快照保证后来修改模板不会改历史。'],
+        ['wo_repair 与 wo_order', 'wo_repair 保存 source_type/source_id、equip_id、description、status；(source_type,source_id) 唯一，避免同一异常重复报修。wo_order 以 repair_id 唯一，保存 assignee_id、执行状态、完工结果、停机与备件成本。', '一次巡检或维保异常至多生成一张报修；一张报修对应一张工单。验收同时关闭工单、报修和来源异常，并调用 M02 恢复设备。']])
+    doc.add_paragraph('A.6 系统分层架构与设计理由', style='Heading 2')
+    doc.add_paragraph('用户层：Vue Web 管理员、设备管理员和管理者，以及 UniApp 巡检员、维修工。接入层：前端路由、REST Controller、JWT、@Valid、@PreAuthorize、ApiResponse。业务层：M02-M06 的 Service、状态机、事务、文件绑定、统计聚合。数据层：MyBatis-Plus Mapper、MySQL/Flyway、Redis 或内存 TTL、对象文件元数据和消息记录。分层的好处是 Controller 不写业务规则、Mapper 不承载状态机，Service 可以复用给 Web 和移动端；认证、数据范围、事务和异常规范可以统一控制。')
+    doc.add_paragraph('A.7 扩展与变更设计能力 新增外部维修供应商', style='Heading 2')
+    add_table(doc, [['改动层面', '可直接回答'],
+        ['角色与数据权限', 'M01 新增 SUPPLIER 角色、菜单/按钮权限和供应商所属数据范围；新增 supplier 主表，账号与 supplier_id 关联，供应商只能读写被派给自己的工单。'],
+        ['数据库与接口', '通过新的 Flyway 迁移新建 supplier、wo_order_supplier 关系表，或在 wo_order 增 supplier_id；增加供应商管理、指派供应商、供应商接单/完工接口与 DTO/VO，历史工单保持兼容。'],
+        ['业务与前端', 'M04 派工状态机增加“待供应商确认”或复用已派工状态但记录派工对象；Web 增加管理端指派页，供应商端仅展示本人任务；所有接口落实数据范围、审计日志和重复指派409。']])
+    doc.add_paragraph('A.8 异常与质量意识', style='Heading 2')
+    add_table(doc, [['真实异常', '处理策略与返回'],
+        ['任务被他人领取或工单状态不允许操作', '更新必须附带旧状态，例如 WHERE id=? AND status=?；影响行数不是1即抛 BusinessException(CONFLICT)，统一返回409，而不是后写覆盖先写。'],
+        ['设备不存在、已停用或跨部门越权', 'Service requireActive 查询并结合 deleted/status；@PreAuthorize 加数据范围校验。不存在404，未认证401，已登录但无权限403，停用或非法状态409。'],
+        ['图片上传失败或文件未绑定', '先上传临时对象并取得 fileId，业务提交时 fileService.bindAll 绑定；事务失败不写业务记录，未绑定文件由清理任务回收。必拍项没有 fileIds 直接400。'],
+        ['弱网重复提交和库存并发', '移动端固定 submitNo 和请求哈希；同号同内容返回历史结果，同号不同内容409。库存使用 stock_qty>=quantity 的原子条件更新，影响行数不是1返回409；写流水和成本汇总放同一事务。']])
+    doc.add_paragraph('A.9 非功能性需求 安全性与可靠性性能', style='Heading 2')
+    add_table(doc, [['方向', '具体实现与答题答案'],
+        ['安全性', '密码 BCrypt 哈希；JWT 含 tokenVersion，禁用或改密后旧 Token 失效；RBAC 控制菜单、按钮和接口，数据范围控制部门/设备可见性；敏感操作写操作日志；文件只保存稳定对象键，下载临时签发。'],
+        ['可靠性与一致性', '跨表写入使用 @Transactional，例如巡检提交、维保审核、工单验收和备件领用；状态和库存均条件更新；Redis 锁只用于降低重复生成，数据库唯一键是最终底线；异常时回滚。'],
+        ['性能与弱网', '列表 pageNum/pageSize 分页；M07 将多表事实按日 upsert 到 stat_equip_daily 并可缓存；移动端保存任务快照、草稿、照片私有目录和待同步队列，网络恢复后按顺序重试且不更换 submitNo。']])
+    doc.add_paragraph('A.10 缺陷与改进思路', style='Heading 2')
+    add_table(doc, [['当前边界', '改进方案与工程理由'],
+        ['统计能力主要是事后分析', '在保留 stat_equip_daily 口径的基础上增加故障趋势、MTBF/MTTR 预测和预警阈值；不能让预测结果反写原始业务单据。'],
+        ['离线能力以队列重试为主', '完善断网拍照、本地草稿恢复、分片上传和自动重传；仍由服务端用 submitNo/submitHash 做最终幂等判断。'],
+        ['权限当前以角色为主', '进一步落到部门、设备分类、设备负责人和工单归属范围；在 Mapper 查询统一注入数据范围，不能只隐藏前端按钮。'],
+        ['设备状态依赖人工录入', '引入二维码全生命周期追踪和物联网状态采集；采集数据应先做协议校验、阈值判断和消息解耦，再进入设备状态机。'],
+        ['提醒与超时治理较基础', '补充待办、超时预警、消息推送、升级规则和处理时限报表，并对通知失败重试和幂等去重。']])
 
 def build(spec):
     doc=Document(); style_doc(doc)
