@@ -16,7 +16,7 @@ SPECS = [
     {
         "name": "郑亮",
         "source": "01-郑亮-M05维保与M06备件.md",
-        "out": "郑亮-维检云枢-M05维保与M06备件-考核复习.docx",
+        "out": "郑亮-维检云枢-M05维保与M06备件-考核复习-修订版.docx",
         "summary": [
             ("接口与输入输出设计", "维保接口的输入是计划/记录 DTO 与审核结论，输出为计划或记录 VO；备件领用以工单 ID 加多条领用明细为输入，输出是流水和更新后的工单成本。必须先说字段校验，再说写入的表和返回值。"),
             ("数据库设计", "M05 以 mt_plan 和 mt_record 分离规则与一次执行事实，(plan_id, maintain_date) 防止同计划同日重复。M06 用 wo_spare 保存当前库存，用 wo_spare_record 保存不可删除的正反向流水，金额字段为 decimal(18,2)。"),
@@ -27,11 +27,39 @@ SPECS = [
             ("M05 维保提交与审核服务", "backend/src/main/java/com/wjys/module/maintenance/service/MaintenanceRecordService.java", ["public MaintenanceRecordVO submit", "public MaintenanceRecordVO audit", "public MaintenanceRecordVO resubmit"]),
             ("M06 库存原子扣减与流水服务", "backend/src/main/java/com/wjys/module/spare/service/SpareConsumptionService.java", ["public List<SpareRecordVO> consume", "public SpareRecordVO reverse"]),
         ],
+        "contracts": [
+            ["创建维保计划", "POST /api/maintenance/plans", "SaveMaintenancePlanRequest：planCode(必填且≤64)、planName(必填≤160)、equipId(必填)、maintainType(0-3)、cycleType(0-3)、cycleValue(≥1)、content(≤500)、assigneeId、nextDate(必填)", "写 mt_plan；校验设备存在和计划编码唯一；返回 ApiResponse<MaintenancePlanVO>"],
+            ["更新/启停计划", "PUT /api/maintenance/plans/{id}；PUT /api/maintenance/plans/{id}/status", "前者同保存 DTO；后者 ChangeMaintenancePlanStatusRequest 的 status", "更新计划或状态；不删除历史记录；返回 MaintenancePlanVO"],
+            ["提交维保记录", "POST /api/maintenance/records", "SaveMaintenanceRecordRequest：planId(可空)、equipId、maintainDate、maintainContent(10-1000)、maintainResult(0/1)、cost(≥0)、downtimeMinutes(≥0)、fileIds(非空)、remark(≤500)", "写 mt_record、绑定 sys_file、设备转保养中；返回 MaintenanceRecordVO"],
+            ["审核/异常转报修", "PUT /api/maintenance/records/{id}/audit；POST /api/maintenance/records/{id}/to-repair", "审核体 AuditMaintenanceRecordRequest：pass(必填)、remark(≤500)；转报修仅路径 id", "审核通过归档并推进 mt_plan.next_date；转报修调用 M04 RepairService，返回 RepairVO"],
+            ["创建/编辑备件", "POST /api/spares；PUT /api/spares/{id}", "SaveSpareRequest：spareCode、spareName、specification、unit、stockQty(≥0)、warningQty(≥0)、unitPrice(≥0)、status", "写 wo_spare；编码唯一；返回 SpareVO"],
+            ["库存调整", "PUT /api/spares/{id}/stock", "AdjustStockRequest：delta(必填，可正可负)、remark(必填)", "更新当前库存并保留操作审计；返回 SpareVO"],
+            ["领用/撤销", "POST /api/work-orders/{orderId}/spares/consume；POST /api/work-orders/spare-records/{recordId}/reverse", "领用体 ConsumeSparesRequest.items 非空；每项 SpareUseRequest：spareId、quantity(正数)、remark。撤销体可选 remark", "条件扣库存、写 wo_spare_record、汇总 wo_order.spare_cost；撤销写反向流水而非删除"],
+        ],
+        "calls": [
+            ["M01 -> M05/M06", "Controller 的 @PreAuthorize 和 WjysPrincipal 提供 maintenance/spare 权限与当前操作人；M05/M06 不自行实现认证。"],
+            ["M05 -> M02", "MaintenanceRecordService.submit 调用 equipmentService.getActive 和 EquipmentStatusService.changeStatus，设备状态及 eq_status_log 由 M02 唯一维护。"],
+            ["M05 -> M04", "MaintenanceRecordService.toRepair 调用 RepairService.createFromMaintenance(recordId,equipId,description,reporterId)，以 MAINTENANCE_RECORD + recordId 防重复。"],
+            ["M04 -> M06", "维修工单 ID 是 SpareConsumptionService.consume 的输入；M06 校验工单状态后写流水并更新 wo_order.spare_cost，M04 不直接扣库存。"],
+            ["M05/M06 -> M07", "M07 的 DashboardQueryMapper 只读维保、工单、库存事实做聚合；M07 不回写 mt_* 或 wo_spare*。"],
+            ["M08 -> M05", "移动端的草稿/同步队列经服务端公开接口提交，照片绑定和重试仍复用同一规则，不产生第二套维保状态机。"],
+        ],
+        "flows": [
+            ["维保提交与审核", "校验设备和计划 -> 查 (plan_id,maintain_date) 去重 -> 插入 mt_record -> fileService.bindAll -> M02 状态服务转保养中 -> 审核条件更新 status=0 -> 通过则推进 next_date/恢复状态，退回则 status=2。", "M05 维保提交与审核服务"],
+            ["工单领用备件", "校验 wo_order 存在且允许领用 -> 校验 wo_spare 启用和 quantity>0 -> 带 stock_qty>=quantity 的条件扣减 -> 写 wo_spare_record -> 汇总有效流水到 wo_order.spare_cost。任一步异常回滚。", "M06 库存原子扣减与流水服务"],
+        ],
+        "qas": [
+            ["为什么归档记录不能改，退回记录却能重提？", "归档是审核确认后的正式设备履历，允许改会破坏审计可信度，因此 status=1 只读；退回 status=2 表示审核未通过，允许经过修正后转回待审核 status=0。代码通过 audit/resubmit 的状态判断和条件更新执行该边界。"],
+            ["审核推进 nextDate 失败怎样保证不乱？", "审核记录、计划 next_date 推进、设备状态恢复在 @Transactional 中；任一步抛异常会回滚，既不会出现“已归档但下次日期没推进”，也不会出现“日期推进但记录仍待审核”。"],
+            ["为什么不能 DELETE wo_spare_record？", "该表是审计流水，删除会丢失已领用、撤销人和金额历史。撤销时以 source_record_id 指回原流水，写相反 direction 的记录并回补库存，保留完整账实变化。"],
+            ["请从领用接口讲到 409。", "Controller 收 orderId 和 items，Service 先验证工单/备件/正数量；SQL 以 stock_qty>=quantity 条件更新。库存不足或并发抢先扣减时影响行数不是 1，抛 BusinessException(HttpStatus.CONFLICT)，统一异常返回 409；成功后在同一事务写流水和成本。"],
+            ["增加采购入库模块要改什么？", "新增 Flyway 迁移建立采购单、入库单或库存流水类型表；新增采购/入库 DTO、VO、Controller、Service 和权限菜单；入库使用事务增加库存并写可审计流水。旧迁移和已发生的领用流水不改写。"],
+        ],
     },
     {
         "name": "高浩然",
         "source": "02-高浩然-M02设备与M04维修.md",
-        "out": "高浩然-维检云枢-M02设备与M04维修-考核复习.docx",
+        "out": "高浩然-维检云枢-M02设备与M04维修-考核复习-修订版.docx",
         "summary": [
             ("接口与输入输出设计", "设备新增/编辑输入 SaveEquipmentRequest，输出 EquipmentListVO；状态变更输入 status、sourceType、sourceId、reason，输出是设备状态与履历。工单派工、完工、验收分别使用独立 DTO，避免一个万能请求体绕过状态机。"),
             ("数据库设计", "eq_equipment 用 equip_code 唯一、deleted 逻辑删除、version 并发控制；eq_param 与 eq_status_log 分离扩展参数和状态审计。wo_repair 与 wo_order 分离申报和执行，repair_id 唯一使一报修仅有一工单。"),
@@ -43,11 +71,39 @@ SPECS = [
             ("M04 报修受理与来源唯一控制", "backend/src/main/java/com/wjys/module/repair/service/RepairService.java", ["public RepairVO createFromAbnormal", "public WorkOrderVO accept"]),
             ("M04 工单派工验收状态机", "backend/src/main/java/com/wjys/module/repair/service/WorkOrderService.java", ["public WorkOrderVO dispatch", "public WorkOrderVO accept"]),
         ],
+        "contracts": [
+            ["设备分页/详情", "GET /api/equipment/equipments；GET /api/equipment/equipments/{id}", "列表参数 keyword、categoryId、status、pageNum(默认1)、pageSize(默认20)；详情仅路径 id", "列表返回 PageResult<EquipmentListVO>；详情返回 EquipmentDetailVO，含参数与状态履历"],
+            ["创建设备/编辑", "POST /api/equipment/equipments；PUT /api/equipment/equipments/{id}", "SaveEquipmentRequest：categoryId、equipCode(必填)、equipName(必填)、model、manufacturer、location、responsibleUserId、purchaseDate、warrantyExpire、description", "分类启用校验、equipCode 唯一；写 eq_equipment；返回 EquipmentListVO"],
+            ["状态/参数/删除", "PUT /api/equipment/equipments/{id}/status；PUT /api/equipment/equipments/{id}/params/{paramId}；DELETE /api/equipment/equipments/{id}", "状态体 ChangeEquipmentStatusRequest：status、sourceType、sourceId、reason；参数体 SaveParamRequest；删除仅路径 id", "状态条件更新并写 eq_status_log；参数归属校验；仅报废且无活跃任务/工单时逻辑删除"],
+            ["异常转报修/受理", "POST /api/repairs/from-abnormal/{abnormalId}；PUT /api/repairs/{id}/accept", "仅路径 abnormalId 或 repair id；当前用户从 WjysPrincipal 获取", "写 wo_repair，来源唯一；受理创建 wo_order、报修 0->1，返回 RepairVO/WorkOrderVO"],
+            ["派工/接单/完工", "PUT /api/work-orders/{id}/dispatch、start、finish", "DispatchRequest：assigneeId(必填)、remark、expectFinishTime；start 无体；FinishRequest：finishReason、repairPlan、finishResult(均必填)、downtimeMinutes(≥0)、fileIds", "状态 0->1->2；写派工/完工字段和 wo_order_log，返回 WorkOrderVO"],
+            ["验收/退回", "PUT /api/work-orders/{id}/accept；PUT /api/work-orders/{id}/reject", "accept 可选 AcceptRequest.remark；reject 为 RejectRequest.reason(必填)", "验收关闭工单/报修/来源异常、调用 M02 恢复设备；退回记录原因并回到维修处理"],
+        ],
+        "calls": [
+            ["M01 -> M02/M04", "EquipmentController、RepairController、WorkOrderController 用 @PreAuthorize 校验 equipment/repair 权限；WjysPrincipal 传递操作人 ID。"],
+            ["M03 -> M04", "AbnormalService.toRepair 调用 M04 的公开 RepairService.createFromAbnormal；M04 以 (source_type,source_id) 唯一约束确保同异常只建一张报修。"],
+            ["M05 -> M04", "MaintenanceRecordService.toRepair 调用 RepairService.createFromMaintenance；M04 复用相同来源唯一策略。"],
+            ["M04 -> M02", "WorkOrderService.dispatch/accept 通过 EquipmentStatusService.changeStatus 改维修中/恢复状态，绝不直接更新 eq_equipment.status。"],
+            ["M06 <-> M04", "M06 以 wo_order.id 领用备件、写 wo_order.spare_cost；M04 只提供工单状态和成本承载，不维护库存。"],
+            ["M04 -> M07/M08", "验收后的故障和停机事实供 M07 聚合；M08 的接单/完工操作复用 M04 Service 的权限与状态机。"],
+        ],
+        "flows": [
+            ["设备状态变更", "解析枚举 -> 查询活动设备 -> WHERE id AND old status AND deleted=0 条件更新并 version+1 -> 影响行数非1返回409 -> 插入 eq_status_log。", "M02 设备状态条件更新和履历"],
+            ["异常到工单验收", "M03/M05 异常 -> 创建 wo_repair -> 受理创建 wo_order -> 派工并转设备维修中 -> 指定维修人接单 -> 完工写原因/方案/停机 -> 验收关闭工单/报修/异常、恢复设备。", "M04 报修受理与来源唯一控制"],
+            ["派工和验收状态机", "派工校验当前工单状态和维修人 -> 记录日志/设备状态；验收校验待验收状态 -> 关闭关联单据并刷新设备/统计；任一步失败事务回滚。", "M04 工单派工验收状态机"],
+        ],
+        "qas": [
+            ["为什么设备状态不能由工单表直接改？", "设备状态是跨巡检、维修、维保共享的权威数据。若 M04 直接 SQL 更新会漏写 eq_status_log，也无法统一做并发和报废状态校验。因此只能调用 M02 EquipmentStatusService。"],
+            ["为什么报修和工单要分表？", "报修表示故障申报，含来源和描述；工单表示受理后的执行过程，含维修人、方案、停机、验收和成本。两者状态、参与者、生命周期不同，分表避免大量空字段并使一报修一工单约束清晰。"],
+            ["两人同时受理同一报修会怎样？", "两人都可能先读到待受理，但更新报修时以 status=0 为条件。第一个成功变为已派单；第二个影响行数为0并收到409，所以不会生成两张工单。"],
+            ["验收为什么要事务？", "验收同时涉及 wo_order、wo_repair、ins_abnormal、eq_equipment/eq_status_log 及统计触发。没有事务会出现工单已完成但设备仍维修中等半完成状态；@Transactional 保证原子提交。"],
+            ["增加外部维修供应商如何改？", "M01 新增供应商角色/权限和数据范围；新增 supplier 主表及 order_supplier 关系或 wo_order.supplier_id；M04 增派工和供应商待办接口，限制只能看自己被派工单；用 Flyway 新增迁移并补越权/禁用/重复派工测试。"],
+        ],
     },
     {
         "name": "张万健",
         "source": "03-张万健-M01M03M07M08与横切设计.md",
-        "out": "张万健-维检云枢-M01M03M07M08与横切设计-考核复习.docx",
+        "out": "张万健-维检云枢-M01M03M07M08与横切设计-考核复习-修订版.docx",
         "summary": [
             ("接口与输入输出设计", "认证接口输入登录/刷新 DTO，输出 TokenPair 和身份权限；巡检提交输入 submitNo、客户端时间、离线标志和任务项数组，输出 TaskSubmitVO；移动同步输入 cursor 或批次队列，输出增量快照或逐项 confirmed/conflict/rejected/retry。"),
             ("数据库设计", "sys_user 的 token_version 用于使旧登录态失效；ins_task 的 (plan_id, plan_time) 和 submit_no 是生成与提交的双重唯一保障；ins_task_item 存检查规则快照；stat_equip_daily 按 (stat_date, equip_id) 聚合。"),
@@ -60,6 +116,35 @@ SPECS = [
             ("M03 服务端校验和异常写入", "backend/src/main/java/com/wjys/module/inspection/service/TaskSubmitService.java", ["public TaskSubmitVO submit"]),
             ("M07 日聚合与缓存失效", "backend/src/main/java/com/wjys/module/dashboard/service/DashboardService.java", ["public void refresh"]),
             ("M08 批量同步复用业务服务", "backend/src/main/java/com/wjys/module/mobile/service/MobileSyncService.java", ["public MobileSyncPushVO push"]),
+        ],
+        "contracts": [
+            ["登录/刷新", "POST /api/auth/login；POST /api/auth/refresh", "LoginRequest：username、password；RefreshTokenRequest：refreshToken", "校验 BCrypt、用户启用和 tokenVersion；返回 TokenPairVO；刷新时撤销旧 jti 并签发新 Token"],
+            ["巡检计划", "POST /api/inspection/plans；PUT /api/inspection/plans/{id}", "CreatePlanRequest/UpdatePlanRequest：planCode、planName、cycleType、cycleValue、startDate、endDate、executeTime、assignmentMode、responsibleUserId、assignmentDeptId、pointIds 等", "校验周期、点位、派发对象；写 ins_plan/ins_plan_point；返回 PlanVO"],
+            ["生成/领取", "POST /api/inspection/plans/{id}/generate；PUT /api/inspection/tasks/{id}/receive", "生成体 GenerateTaskRequest：planTime；领取仅路径 taskId", "写 ins_task 和 ins_task_item 快照；领取条件更新 0->1，返回 TaskVO"],
+            ["提交巡检", "POST /api/inspection/tasks/{id}/submit", "TaskSubmitRequest：submitNo、clientSubmitTime、offlineFlag、items；SubmitItemRequest：taskItemId、checkResult、checkValue、remark、checkTime、fileIds", "校验执行人/完整项/必拍/扫码/幂等；写任务项、异常、提交哈希、文件绑定；返回 TaskSubmitVO"],
+            ["移动同步", "GET /api/mobile/sync/pull；POST /api/mobile/sync/push；PUT /api/mobile/messages/{id}/read", "pull：cursor、lastSyncTime、modules；push：含固定 submitNo 的批次项目；read 仅路径消息 ID", "pull 返回快照增量和 cursor；push 每条 confirmed/conflict/rejected/retry，单条失败不阻断其它项"],
+            ["看板/导出", "GET /api/dashboard/overview、trend、pareto、ranking；导出接口", "分类、开始/结束日期、维度、topN 等查询参数", "返回 Dashboard*VO；日期范围最长365天，缓存10分钟，导出为 XLSX"],
+        ],
+        "calls": [
+            ["M01 -> 全模块", "AuthService/JWT 提供身份；Controller 的 @PreAuthorize 执行接口授权；RoleService 的菜单关系驱动 Web 路由和按钮展示。"],
+            ["M03 -> M02", "TaskGenerateService 读取设备/点位并将设备编码、阈值等写入 ins_task_item 快照；状态改变仍经 M02 Service。"],
+            ["M03 -> M04", "AbnormalService.toRepair 调用 RepairService.createFromAbnormal，异常来源唯一避免离线重试重复建报修。"],
+            ["M08 -> M03/M04/M05", "MobileSyncService.push 按队列逐条调用既有提交 Service；移动端不直接写业务表、不复制状态机。"],
+            ["M07 <- M02~M06", "DashboardQueryMapper 只读设备、巡检、工单、备件等事实；DashboardService.refresh upsert stat_equip_daily 后失效缓存。"],
+            ["Redis/消息横切", "任务生成锁用随机 token 释放校验所有权；统计使用 Redis/内存 TTL；消息在业务动作后持久化到 sys_message。"],
+        ],
+        "flows": [
+            ["认证与授权", "登录查用户 -> BCrypt 比较 -> 检查 status -> 记录最后登录时间 -> 以 tokenVersion 签发 Token；刷新时比较 tokenVersion 并撤销旧 jti。", "M01 登录令牌处理"],
+            ["生成任务快照", "校验计划日期/周期 -> Redis token 锁 -> 数据库 (plan_id,plan_time) 唯一兜底 -> 写 ins_task -> 遍历点位/检查项写 ins_task_item 快照。", "M03 任务生成和幂等提交"],
+            ["巡检提交", "校验任务状态/执行人/submitNo -> 重算阈值和必拍 -> 更新 ins_task_item -> 写 ins_abnormal -> 更新任务提交哈希与统计 -> 绑定文件；整个事务失败回滚。", "M03 服务端校验和异常写入"],
+            ["看板聚合与移动同步", "按设备按日查询业务事实 -> upsert stat_equip_daily -> 删除 dashboard 缓存前缀；移动 push 保持 submitNo，逐条映射 confirmed/conflict/rejected/retry。", "M07 日聚合与缓存失效"],
+        ],
+        "qas": [
+            ["为什么 Redis 锁后仍需要数据库唯一键？", "Redis 锁可能因超时、进程崩溃或网络异常失效；数据库 uk_ins_task_plan_time 是最终一致性底线。两者是性能层去重和数据层兜底的双保险。"],
+            ["为什么离线重试不能换 submitNo？", "服务端用 submitNo 和 submitHash 识别同一业务提交。换号会被当作新提交，可能重复更新任务、重复异常和重复报修；固定号才能安全重试。"],
+            ["为什么看板要只读和日聚合？", "业务单据的写入规则属于原模块，看板不能反向篡改；日聚合将高成本的多表统计转换成按设备按日读取，口径可固化并适合缓存。"],
+            ["为什么 M08 不能复制一套巡检规则？", "若移动端另实现阈值、状态和幂等规则，Web 与 App 会产生不同结果。M08 只管存储、队列、照片和网络，提交复用服务端 TaskSubmitService 才保证唯一业务权威。"],
+            ["巡检提交的完整异常处理是什么？", "参数或枚举问题返回400；未登录401；非巡检员/非执行人403；任务不存在404；重复 submitNo、状态不允许、并发领取、同号不同载荷返回409；网络/5xx 由移动端保留队列退避重试。"],
         ],
     },
 ]
@@ -87,6 +172,11 @@ def set_cell_margins(cell, top=90, start=90, bottom=90, end=90):
 def set_repeat_table_header(row):
     trPr = row._tr.get_or_add_trPr()
     tblHeader = OxmlElement('w:tblHeader'); tblHeader.set(qn('w:val'), 'true'); trPr.append(tblHeader)
+
+def prevent_row_split(row):
+    trPr = row._tr.get_or_add_trPr()
+    node = OxmlElement('w:cantSplit')
+    trPr.append(node)
 
 def font(run, name='Microsoft YaHei', size=10.5, bold=False, color=None):
     run.font.name = name; run._element.rPr.rFonts.set(qn('w:eastAsia'), name)
@@ -120,12 +210,13 @@ def add_table(doc, rows):
     tbl = doc.add_table(rows=1, cols=len(rows[0])); tbl.alignment = WD_TABLE_ALIGNMENT.CENTER; tbl.style = 'Table Grid'
     hdr = tbl.rows[0]
     set_repeat_table_header(hdr)
+    prevent_row_split(hdr)
     for i, value in enumerate(rows[0]):
         cell = hdr.cells[i]; cell.text = ''
         p = cell.paragraphs[0]; r = p.add_run(value); font(r, size=8.7, bold=True, color=(255,255,255))
         set_cell_shading(cell, '1F4E78'); set_cell_margins(cell); cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
     for idx, row in enumerate(rows[1:]):
-        cells = tbl.add_row().cells
+        new_row = tbl.add_row(); prevent_row_split(new_row); cells = new_row.cells
         for i, value in enumerate(row):
             cell = cells[i]; cell.text = ''
             p = cell.paragraphs[0]; r = p.add_run(value); font(r, size=8.4)
@@ -186,28 +277,44 @@ def extract_method(path, marker, max_lines=70):
         if len(out)>=max_lines: out.append('    // 代码节选到此，完整实现见源文件'); break
     return '\n'.join(out)
 
-def add_code_section(doc, codes):
-    doc.add_page_break(); doc.add_paragraph('关键代码支撑与讲解', style='Heading 1')
-    doc.add_paragraph('以下为仓库真实 Service 代码节选。考核中不要逐行背诵，应说明：输入如何校验、什么条件更新、写了哪些表、事务如何保证一致性、失败如何返回。')
-    for title, path, markers in codes:
-        doc.add_paragraph(title, style='Heading 2')
-        p=doc.add_paragraph(); r=p.add_run(f'代码位置：{path}'); font(r, size=9, color=(80,80,80))
-        for marker in markers:
-            doc.add_paragraph(marker, style='Heading 3')
-            code=extract_method(Path(path), marker)
-            p=doc.add_paragraph(); p.paragraph_format.left_indent=Inches(.12); p.paragraph_format.right_indent=Inches(.08)
-            for n, line in enumerate(code.splitlines()):
-                r=p.add_run(f'{n+1:>2}  {line}\n'); font(r, name='Consolas', size=7.4)
+def add_code(doc, title, path, markers):
+    doc.add_paragraph(title, style='Heading 3')
+    p=doc.add_paragraph(); r=p.add_run(f'真实代码位置：{path}'); font(r, size=9, color=(80,80,80))
+    for marker in markers:
+        doc.add_paragraph(marker, style='Heading 3')
+        code=extract_method(Path(path), marker, max_lines=48)
+        p=doc.add_paragraph(); p.paragraph_format.left_indent=Inches(.12); p.paragraph_format.right_indent=Inches(.08)
+        for n, line in enumerate(code.splitlines()):
+            r=p.add_run(f'{n+1:>2}  {line}\n'); font(r, name='Consolas', size=7.4)
+
+def add_audited_implementation(doc, spec):
+    doc.add_paragraph('二 模块实现审计 重点答案与代码证据', style='Heading 1')
+    doc.add_paragraph('本节按考核最常问的顺序组织：先给接口与输入输出，再给数据库和调用方向；每条核心流程之后立即给出对应 Service 的真实代码节选。')
+    doc.add_paragraph('2.1 接口与输入输出设计能力', style='Heading 2')
+    add_table(doc, [['能力', '实际路径与方法', '输入字段及校验', '输出效果与写入']] + spec['contracts'])
+    doc.add_paragraph('回答模板：Controller 用 @Valid 校验 DTO、用 @PreAuthorize 校验权限、从 WjysPrincipal 取操作人；Service 负责状态机与事务；成功统一封装为 ApiResponse<VO>，非法状态、重复提交或并发失败返回 409。')
+    doc.add_paragraph('2.2 与其他模块的调用方向', style='Heading 2')
+    add_table(doc, [['调用方向', '实际调用关系和职责边界']] + spec['calls'])
+    doc.add_paragraph('2.3 核心业务流程 数据处理与紧邻代码支撑', style='Heading 2')
+    code_map={title:(path,markers) for title,path,markers in spec['codes']}
+    for flow, steps, code_title in spec['flows']:
+        doc.add_paragraph(flow, style='Heading 3')
+        p=doc.add_paragraph(); r=p.add_run('流程答案：'); font(r, bold=True); p.add_run(steps)
+        path,markers=code_map[code_title]
+        add_code(doc, f'代码证据：{code_title}', path, markers)
+    doc.add_paragraph('2.4 面试式自测题 标准答案', style='Heading 2')
+    add_table(doc, [['题目', '标准回答']] + spec['qas'])
 
 def build(spec):
     doc=Document(); style_doc(doc)
     add_title(doc, f'维检云枢 {spec["name"]} 后期考核复习', '系统实现重点版')
     doc.add_paragraph('一 重点考核答案', style='Heading 1')
     add_table(doc, [['考核点', '可直接作答的答案']] + [[a,b] for a,b in spec['summary']])
-    doc.add_paragraph('二 个人负责模块完整复习', style='Heading 1')
+    add_audited_implementation(doc, spec)
+    doc.add_page_break()
+    doc.add_paragraph('三 个人负责模块完整复习资料', style='Heading 1')
     md=(Path(__file__).resolve().parent/spec['source']).read_text(encoding='utf-8')
     add_markdown(doc, md)
-    add_code_section(doc, spec['codes'])
     doc.save(OUT/spec['out'])
 
 for spec in SPECS:
