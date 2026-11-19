@@ -12,6 +12,19 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent / "Word复习资料"
 OUT.mkdir(exist_ok=True)
 
+PUBLIC_QAS = [
+    ["需求与权限能力：管理员、设备管理员、巡检员、维修工的权限边界如何区别？", "系统管理员维护账号、角色、菜单、部门和字典；设备管理员维护本数据范围内设备、受理派工、验收与维保审核；巡检员只能领取或执行分配给自己的任务；维修工只能接单、完工和按工单领用备件，不能验收或维护台账。权限不只靠前端按钮：Controller 用 @PreAuthorize，查询还要落实部门/设备数据范围。"],
+    ["模块划分能力：为什么 M02 是设备状态唯一入口，而 M03/M04/M05 不能直接更新设备表？", "设备状态是巡检、维修、维保共享的权威信息。若各模块直接 UPDATE eq_equipment，会绕过报废校验、并发条件和 eq_status_log 审计。M03/M04/M05 都调用 EquipmentStatusService.changeStatus，由它以旧状态条件更新 version 并写履历，才能保持状态机统一。"],
+    ["流程闭环能力：从巡检提交到维修验收，哪些状态、表和责任人发生变化？", "巡检员领取 ins_task 后提交；TaskSubmitService 更新 ins_task_item、写 ins_abnormal，并将任务条件更新为完成。异常由 M04 创建 wo_repair，设备管理员受理生成 wo_order 并派工，维修工接单/完工，设备管理员验收时关闭工单、报修和来源异常，调用 M02 恢复设备；M07 再读取这些事实做统计。"],
+    ["接口输入输出能力：以巡检提交接口为例，如何完整说明 DTO、校验、写表、输出和异常？", "路径是 POST /api/inspection/tasks/{taskId}/submit；TaskSubmitRequest 含 submitNo、clientSubmitTime、offlineFlag 和 items，每项有 taskItemId、checkResult、checkValue、remark、checkTime、fileIds。先校验角色、执行人、任务状态、明细完整性、必拍、阈值和幂等；再更新任务项、插异常、绑定文件、条件更新任务。成功返回 TaskSubmitVO；400 是参数/字段错误，403 是非执行人，404 是任务不存在，409 是同号不同内容、状态冲突或并发冲突。"],
+    ["数据库设计能力：为什么 ins_task 与 ins_task_item 要保存快照，而不是只关联当前计划和检查项？", "计划和检查项是可修改的规则，任务和任务项是一次历史执行事实。任务项保存当时设备、点位、阈值、单位、必拍和填写结果，后续修改模板不会篡改已完成巡检；(plan_id,plan_time) 防重复生成，submit_no 和 submit_hash 防重复提交。"],
+    ["并发与事务能力：为什么 Redis 锁不能替代数据库唯一键和条件更新？", "Redis 锁会因超时、进程崩溃或网络异常失效，只用于减少重复竞争。任务生成仍要用 (plan_id,plan_time) 唯一键兜底；状态流转和库存扣减仍要用 WHERE old_status 或 stock_qty>=quantity 条件更新。影响行数不是1返回409，跨表写入用 @Transactional 回滚，数据库才是最终一致性底线。"],
+    ["架构能力：Controller、Service、Mapper、DTO、VO 各自做什么，为什么不能混写？", "Controller 只接收 DTO、@Valid、@PreAuthorize 和当前用户，返回 ApiResponse<VO>；Service 承载状态机、事务、跨模块调用和异常；Mapper 只负责数据访问；DTO 是输入校验契约，VO 是输出契约，Entity 不直接暴露。这样 Web 与移动端能复用 Service，权限、事务和异常也能统一。"],
+    ["扩展能力：新增外部维修供应商，怎样修改而不破坏历史数据？", "M01 新增 SUPPLIER 角色、菜单、数据范围和账号关联；新建 supplier 及 wo_order_supplier 关系表，或在 wo_order 增 supplier_id，全部通过新 Flyway 迁移；M04 增加供应商指派/接单接口和前端待办。旧工单和旧流水不改写，供应商查询限制为自己被派工单，并补越权、禁用、重复派工409测试。"],
+    ["异常质量能力：弱网照片上传失败、重复提交和库存不足分别如何处理？", "照片先上传临时对象，提交时绑定 fileId；必拍缺失400，业务事务失败不落业务记录，未绑定文件由清理任务回收。弱网队列固定 submitNo，同号同内容幂等返回，同号不同内容409。库存以 stock_qty>=quantity 原子扣减，影响行数不是1即409；扣库、流水、成本汇总放一个事务。"],
+    ["非功能与反思能力：系统如何回答安全性、可靠性和后续改进？", "安全上使用 BCrypt、JWT 刷新轮换、tokenVersion、RBAC、数据范围、操作日志和临时文件访问；可靠性上使用条件更新、事务、唯一键、离线队列和分页/日聚合缓存。当前看板偏事后分析、离线能力以重试为主、权限可继续细化；后续可增加预测预警、断网拍照自动重传、设备范围权限、IoT 状态接入和超时通知。"],
+]
+
 SPECS = [
     {
         "name": "郑亮",
@@ -67,6 +80,11 @@ SPECS = [
             ["为什么不能 DELETE wo_spare_record？", "该表是审计流水，删除会丢失已领用、撤销人和金额历史。撤销时以 source_record_id 指回原流水，写相反 direction 的记录并回补库存，保留完整账实变化。"],
             ["请从领用接口讲到 409。", "Controller 收 orderId 和 items，Service 先验证工单/备件/正数量；SQL 以 stock_qty>=quantity 条件更新。库存不足或并发抢先扣减时影响行数不是 1，抛 BusinessException(HttpStatus.CONFLICT)，统一异常返回 409；成功后在同一事务写流水和成本。"],
             ["增加采购入库模块要改什么？", "新增 Flyway 迁移建立采购单、入库单或库存流水类型表；新增采购/入库 DTO、VO、Controller、Service 和权限菜单；入库使用事务增加库存并写可审计流水。旧迁移和已发生的领用流水不改写。"],
+            ["接口字段能力：请按字段说明 SaveMaintenanceRecordRequest 的处理。", "输入包括可空 planId、equipId、maintainDate、10-1000字 maintainContent、maintainResult、非负 cost、非负 downtimeMinutes、非空 fileIds 和不超过500字 remark。Service 先查启用设备；若 planId 不为空，再校验计划存在、未停用且属于该设备；按 (plan_id,maintain_date) 去重，再写 mt_record、绑定文件、转设备保养中，返回 MaintenanceRecordVO。"],
+            ["数据建模能力：为什么 mt_plan 与 mt_record 必须分表？", "mt_plan 是周期、负责人、下次日期等可持续变化的规则；mt_record 是某日谁做了什么、结果、成本、照片和审核结论的不可变履历。若放同一表，计划每次执行会覆盖历史或产生大量重复字段；分表后计划与记录是一对多，审核只更新记录状态并在通过时推进计划 next_date。"],
+            ["状态机能力：维保审核的通过、退回、重提分别做什么？", "只有待审核 status=0 能审核。通过变为1归档只读，同时推进 next_date、恢复设备状态；退回变为2并记录原因，不推进日期；维保人员修正内容后重提，把2变回0。所有跨表改变置于事务，非法状态或并发影响行数非1返回409。"],
+            ["库存设计能力：为什么人工调整和工单领用不能用同一种简单 UPDATE？", "人工调整是盘点或更正，需要 delta 与 remark 并记录操作审计；工单领用必须关联 order_id、扣减条件、领用人、单价和金额，形成 wo_spare_record 并汇总 wo_order.spare_cost。两者业务来源和审计字段不同，领用还必须防止库存被扣成负数。"],
+            ["调用关系能力：维保异常转报修时，M05 为什么不直接写 wo_repair？", "wo_repair 的来源唯一、报修状态和后续工单生成规则属于 M04。M05 只提供 recordId、equipId、描述和操作人，调用 RepairService.createFromMaintenance；这样巡检异常和维保异常复用同一去重/状态机，避免两个模块各自维护一套报修逻辑。"],
         ],
     },
     {
@@ -123,6 +141,11 @@ SPECS = [
             ["两人同时受理同一报修会怎样？", "两人都可能先读到待受理，但更新报修时以 status=0 为条件。第一个成功变为已派单；第二个影响行数为0并收到409，所以不会生成两张工单。"],
             ["验收为什么要事务？", "验收同时涉及 wo_order、wo_repair、ins_abnormal、eq_equipment/eq_status_log 及统计触发。没有事务会出现工单已完成但设备仍维修中等半完成状态；@Transactional 保证原子提交。"],
             ["增加外部维修供应商如何改？", "M01 新增供应商角色/权限和数据范围；新增 supplier 主表及 order_supplier 关系或 wo_order.supplier_id；M04 增派工和供应商待办接口，限制只能看自己被派工单；用 Flyway 新增迁移并补越权/禁用/重复派工测试。"],
+            ["接口字段能力：SaveEquipmentRequest 为什么不直接包含任意参数列？", "主请求只保存 categoryId、equipCode、equipName、model、manufacturer、location、responsibleUserId、purchaseDate、warrantyExpire、description 等稳定主档字段。不同类别的技术参数放 eq_param，以 paramName、paramValue、unit、sortNo 一对多保存；这样新增类别不需要频繁改 eq_equipment 表结构。"],
+            ["设备生命周期能力：为什么删除要限定报废且无活跃任务/工单？", "设备可能仍被巡检任务、维保记录、报修和工单引用。直接物理删除会破坏外键语义和历史报表，因此使用 deleted 逻辑删除；只有设备已报废、且不存在活跃任务或维修工单时才允许删除，历史记录仍能展示当时的设备关联。"],
+            ["来源去重能力：M03/M05 异常反复调用 createFromAbnormal 或 createFromMaintenance 会怎样？", "M04 以 source_type 和 source_id 标识来源，并用唯一约束和 Service 查询保证幂等。同一巡检异常或维保记录第一次创建 wo_repair，后续相同来源请求返回已有记录或受唯一约束保护，不会产生多张报修和多张工单。"],
+            ["工单状态机能力：派工、接单、完工、验收各是谁操作、校验什么？", "设备管理员对待派工单指定维修人；指定维修工只能接自己被派的工单；维修工完工必须填原因、方案、结果、停机与文件；设备管理员只验收待验收工单。每步均附带旧状态条件、写 wo_order_log；验收事务内关闭相关报修/异常并调用 M02 恢复设备。"],
+            ["数据一致性能力：为什么验收失败必须整体回滚？", "验收至少改变 wo_order、wo_repair、来源 ins_abnormal 或 mt_record、eq_equipment/eq_status_log，且影响 M07 的统计事实。若工单已关闭而设备状态恢复失败，会出现用户看到完成、系统仍显示维修中的矛盾；因此 Service 用 @Transactional，任一步异常都撤销全部写入。"],
         ],
     },
     {
@@ -184,6 +207,11 @@ SPECS = [
             ["为什么看板要只读和日聚合？", "业务单据的写入规则属于原模块，看板不能反向篡改；日聚合将高成本的多表统计转换成按设备按日读取，口径可固化并适合缓存。"],
             ["为什么 M08 不能复制一套巡检规则？", "若移动端另实现阈值、状态和幂等规则，Web 与 App 会产生不同结果。M08 只管存储、队列、照片和网络，提交复用服务端 TaskSubmitService 才保证唯一业务权威。"],
             ["巡检提交的完整异常处理是什么？", "参数或枚举问题返回400；未登录401；非巡检员/非执行人403；任务不存在404；重复 submitNo、状态不允许、并发领取、同号不同载荷返回409；网络/5xx 由移动端保留队列退避重试。"],
+            ["认证代码能力：AuthService.login 和 refresh 为什么都要看 tokenVersion？", "login 用 BCrypt 校验口令和用户 status，并把 tokenVersion 写入新 Token。refresh 除了验证 refreshToken 和 jti，还要比较 Token 内版本与 sys_user.token_version；管理员禁用用户或用户改密后递增版本，旧 accessToken/refreshToken 即使未到期也失效，避免只靠黑名单维护全部旧令牌。"],
+            ["任务生成能力：为什么生成时既写 ins_task 又写 ins_task_item，而不是提交时再查模板？", "ins_task 是某个计划在 planTime 的执行实例；生成时即把点位、设备、检查项、阈值、单位和必拍要求冻结到 ins_task_item。提交时依据快照复算，不受后来修改计划/检查项的影响；Redis token 锁减少竞争，(plan_id,plan_time) 唯一键是最终重复生成保护。"],
+            ["提交字段能力：TaskSubmitRequest 的 submitNo 和 submitHash 如何配合？", "客户端首次提交生成 submitNo，重试始终带同一号码；服务端从请求计算 submitHash。若 submitNo 已存在且 hash 相同，返回已有 TaskSubmitVO 并标记 idempotentReplay；若号码相同但内容不同，返回409，避免同一离线队列被改写后重复落异常或重复报修。"],
+            ["移动端数据处理能力：照片、草稿和同步队列怎样防止弱网丢数据？", "页面不直接拼 Storage 键，而经 storageRepository 保存草稿和任务快照；syncQueue 保存 submitNo、业务类型、主键、请求摘要、创建时间、重试次数和状态。照片先保存在应用私有目录，上传成功且业务 bindAll 后才可清理。网络恢复按队列顺序 push，409 冲突提示人工处理，网络/5xx 退避重试。"],
+            ["看板与缓存能力：为什么 DashboardService 只能聚合、不能回写业务表？", "设备、巡检、维修、维保和库存单据的状态机属于各原模块；看板应只读取事实并 upsert stat_equip_daily，形成按设备按日的读模型。刷新后失效 dashboard 缓存前缀，查询口径稳定且性能更好；若看板反写原单，会绕过原模块的权限、事务和审计。"],
         ],
     },
 ]
@@ -368,8 +396,9 @@ def add_audited_implementation(doc, spec):
             shown_code_titles.add(code_title)
         else:
             p=doc.add_paragraph(); r=p.add_run('实现定位：'); font(r, bold=True); p.add_run(f'{path}；本材料只保留两段关键业务代码，避免代码块淹没复习重点。')
-    doc.add_paragraph('B.6 面试式自测题 标准答案', style='Heading 2')
-    add_table(doc, [['题目', '标准回答']] + spec['qas'])
+    doc.add_paragraph('B.6 本人模块能力追问 标准答案', style='Heading 2')
+    doc.add_paragraph('本表不是背诵题库，而是检查能否把接口字段、表约束、Service、状态机、事务和跨模块调用连成一次可复述的实现说明。')
+    add_table(doc, [['具体考察能力与追问', '标准回答']] + spec['qas'])
 
 def add_public_system_section(doc):
     doc.add_paragraph('A 全项目公共复习区 本页内置 考前先过一遍', style='Heading 1')
@@ -437,6 +466,9 @@ def add_public_system_section(doc):
         ['权限当前以角色为主', '进一步落到部门、设备分类、设备负责人和工单归属范围；在 Mapper 查询统一注入数据范围，不能只隐藏前端按钮。'],
         ['设备状态依赖人工录入', '引入二维码全生命周期追踪和物联网状态采集；采集数据应先做协议校验、阈值判断和消息解耦，再进入设备状态机。'],
         ['提醒与超时治理较基础', '补充待办、超时预警、消息推送、升级规则和处理时限报表，并对通知失败重试和幂等去重。']])
+    doc.add_paragraph('A.11 公共系统能力追问 标准答案', style='Heading 2')
+    doc.add_paragraph('以下问题模拟老师从“能否讲概念”进一步追问到“是否理解实现”。回答时先给结论，再指出对应模块、类、表、状态或异常处理。')
+    add_table(doc, [['具体考察能力与追问', '标准回答']] + PUBLIC_QAS)
 
 def build(spec):
     doc=Document(); style_doc(doc)
