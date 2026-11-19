@@ -16,7 +16,7 @@ SPECS = [
     {
         "name": "郑亮",
         "source": "01-郑亮-M05维保与M06备件.md",
-        "out": "郑亮-维检云枢-M05维保与M06备件-考核复习-修订版.docx",
+        "out": "郑亮-维检云枢-M05维保与M06备件-考核复习-终版.docx",
         "summary": [
             ("接口与输入输出设计", "维保接口的输入是计划/记录 DTO 与审核结论，输出为计划或记录 VO；备件领用以工单 ID 加多条领用明细为输入，输出是流水和更新后的工单成本。必须先说字段校验，再说写入的表和返回值。"),
             ("数据库设计", "M05 以 mt_plan 和 mt_record 分离规则与一次执行事实，(plan_id, maintain_date) 防止同计划同日重复。M06 用 wo_spare 保存当前库存，用 wo_spare_record 保存不可删除的正反向流水，金额字段为 decimal(18,2)。"),
@@ -59,7 +59,7 @@ SPECS = [
     {
         "name": "高浩然",
         "source": "02-高浩然-M02设备与M04维修.md",
-        "out": "高浩然-维检云枢-M02设备与M04维修-考核复习-修订版.docx",
+        "out": "高浩然-维检云枢-M02设备与M04维修-考核复习-终版.docx",
         "summary": [
             ("接口与输入输出设计", "设备新增/编辑输入 SaveEquipmentRequest，输出 EquipmentListVO；状态变更输入 status、sourceType、sourceId、reason，输出是设备状态与履历。工单派工、完工、验收分别使用独立 DTO，避免一个万能请求体绕过状态机。"),
             ("数据库设计", "eq_equipment 用 equip_code 唯一、deleted 逻辑删除、version 并发控制；eq_param 与 eq_status_log 分离扩展参数和状态审计。wo_repair 与 wo_order 分离申报和执行，repair_id 唯一使一报修仅有一工单。"),
@@ -103,7 +103,7 @@ SPECS = [
     {
         "name": "张万健",
         "source": "03-张万健-M01M03M07M08与横切设计.md",
-        "out": "张万健-维检云枢-M01M03M07M08与横切设计-考核复习-修订版.docx",
+        "out": "张万健-维检云枢-M01M03M07M08与横切设计-考核复习-终版.docx",
         "summary": [
             ("接口与输入输出设计", "认证接口输入登录/刷新 DTO，输出 TokenPair 和身份权限；巡检提交输入 submitNo、客户端时间、离线标志和任务项数组，输出 TaskSubmitVO；移动同步输入 cursor 或批次队列，输出增量快照或逐项 confirmed/conflict/rejected/retry。"),
             ("数据库设计", "sys_user 的 token_version 用于使旧登录态失效；ins_task 的 (plan_id, plan_time) 和 submit_no 是生成与提交的双重唯一保障；ins_task_item 存检查规则快照；stat_equip_daily 按 (stat_date, equip_id) 聚合。"),
@@ -297,22 +297,62 @@ def add_audited_implementation(doc, spec):
     add_table(doc, [['调用方向', '实际调用关系和职责边界']] + spec['calls'])
     doc.add_paragraph('2.3 核心业务流程 数据处理与紧邻代码支撑', style='Heading 2')
     code_map={title:(path,markers) for title,path,markers in spec['codes']}
+    key_code_titles = {'M05 维保提交与审核服务', 'M06 库存原子扣减与流水服务', 'M02 设备状态条件更新和履历', 'M04 工单派工验收状态机', 'M03 任务生成和幂等提交', 'M03 服务端校验和异常写入'}
     for flow, steps, code_title in spec['flows']:
         doc.add_paragraph(flow, style='Heading 3')
         p=doc.add_paragraph(); r=p.add_run('流程答案：'); font(r, bold=True); p.add_run(steps)
         path,markers=code_map[code_title]
-        add_code(doc, f'代码证据：{code_title}', path, markers)
+        if code_title in key_code_titles:
+            add_code(doc, f'关键代码证据：{code_title}', path, markers)
+        else:
+            p=doc.add_paragraph(); r=p.add_run('实现定位：'); font(r, bold=True); p.add_run(f'{path}；本材料只保留两段关键业务代码，避免代码块淹没复习重点。')
     doc.add_paragraph('2.4 面试式自测题 标准答案', style='Heading 2')
     add_table(doc, [['题目', '标准回答']] + spec['qas'])
+
+def add_public_system_section(doc):
+    doc.add_page_break()
+    doc.add_paragraph('二 系统公共复习 项目背景到公共实现能力', style='Heading 1')
+    doc.add_paragraph('这一章是本成员材料内置的系统公共考核答案，不依赖其它文档。先能完整讲清系统，再讲个人负责模块，才能说明个人实现如何嵌入整体。')
+    doc.add_paragraph('2.1 项目背景 目标与面向用户', style='Heading 2')
+    doc.add_paragraph('维检云枢面向企业设备运维场景。传统台账、纸质巡检、故障报修和备件领用相互脱节，常见问题是设备状态不一致、异常没有闭环、维修过程不可追溯、库存账实不清。系统以设备为业务主线，把台账、巡检、报修维修、维保、备件和统计接成可审计闭环。')
+    add_table(doc, [['用户角色', '主要需求', '系统能力与权限边界'],
+        ['系统管理员', '维护账号、角色、菜单、部门、字典与日志', 'M01；管理系统配置，不领取和提交巡检任务'],
+        ['设备管理员', '维护设备台账、配置巡检、受理派工、验收与维保审核', 'M02/M03/M04/M05；可管理本权限范围内业务'],
+        ['巡检员', '在现场领取任务、扫码、填写检查项、上传照片和离线提交', 'M03/M08；只能执行分配或领取的任务'],
+        ['维修工', '接单、登记维修过程、完工和备件消耗', 'M04/M06；不能越权验收或管理台账'],
+        ['企业管理者', '查看设备健康、故障趋势、排行和预警', 'M07；以只读分析为主']])
+    doc.add_paragraph('2.2 功能需求 模块边界与分工', style='Heading 2')
+    add_table(doc, [['模块', '功能需求和关键产物', '负责人', '直接依赖或被调用关系'],
+        ['M01 系统与基础数据', '登录、刷新、用户、角色、菜单、部门、字典、操作日志、数据范围；sys_*', '张万健', '向全部模块提供身份、权限和操作人'],
+        ['M02 设备档案', '分类、设备、参数、二维码、状态履历；eq_*', '高浩然', '被 M03/M04/M05 调用；设备状态唯一入口'],
+        ['M03 巡检', '点位、检查项、计划、任务快照、领取、提交、异常；ins_*', '张万健', '读 M02；异常调用 M04；M08 复用其提交规则'],
+        ['M04 报修维修', '报修、受理、派工、接单、完工、验收、日志；wo_repair/wo_order', '高浩然', '接收 M03/M05 异常；调用 M02 改状态；向 M06 提供工单'],
+        ['M05 维保', '保养计划、记录、审核归档、异常转报修；mt_*', '郑亮', '调用 M02 状态服务和 M04 报修服务'],
+        ['M06 备件', '备件台账、预警、库存调整、工单领用和流水；wo_spare*', '郑亮', '以 M04 工单为领用对象，更新工单备件成本'],
+        ['M07 看板', '日统计、总览、趋势、Pareto、排行、导出；stat_equip_daily', '张万健', '只读聚合 M02-M06，不能反写业务'],
+        ['M08 移动协同', '任务快照、草稿、离线队列、照片、pull/push、消息', '张万健', '调用 M03/M04/M05 公开 Service，不复制业务规则']])
+    doc.add_paragraph('2.3 最主要业务流程及调用方向', style='Heading 2')
+    doc.add_paragraph('流程一 巡检到维修：M01 鉴权 -> M03 计划按执行时刻生成任务快照 -> 巡检员领取 -> TaskSubmitService 校验完整项、扫码、必拍和阈值 -> 写 ins_abnormal -> AbnormalService 调用 M04 RepairService.createFromAbnormal -> 受理创建 wo_order -> M04 派工/接单/完工/验收 -> M04 调用 M02 EquipmentStatusService 恢复设备 -> M07 聚合故障与停机事实。')
+    doc.add_paragraph('流程二 维保到归档：M05 提交 mt_record 和文件绑定 -> 调用 M02 状态服务进入保养中 -> 审核通过推进 mt_plan.next_date 并归档只读，退回后可重提 -> 发现异常时 M05 调用 M04 RepairService.createFromMaintenance。')
+    doc.add_paragraph('流程三 工单到备件成本：M04 工单进入允许领用状态 -> M06 SpareConsumptionService 校验工单、备件和数量 -> SQL 条件扣减 wo_spare.stock_qty -> 写 wo_spare_record -> 汇总写 wo_order.spare_cost；撤销通过反向流水回补，不删除历史。')
+    doc.add_paragraph('流程四 移动离线：M08 pull 获取任务/消息快照和 cursor -> 页面写草稿和固定 submitNo 队列 -> 照片先留私有目录 -> 联网上传绑定 fileId -> push 逐条复用 M03 提交服务 -> confirmed 清理、409 冲突交人工、网络/5xx 退避。')
+    doc.add_paragraph('2.4 公共架构 数据库与数据处理能力', style='Heading 2')
+    add_table(doc, [['考察点', '系统实现与可直接回答'],
+        ['分层架构', '用户层为 Vue Web 与 UniApp；接入层为 Controller、JWT、@Valid、@PreAuthorize、ApiResponse；业务层为 Service、状态机和 @Transactional；数据层为 Mapper、MySQL/Flyway、Redis/内存 TTL、对象文件元数据。DTO 负责请求校验，VO 负责输出，Entity 不直接做接口入出参。'],
+        ['核心数据库设计', 'eq_equipment 以 equip_code 唯一、status/deleted/version 管生命周期；ins_task 用 (plan_id,plan_time) 与 submit_no 双唯一并配 ins_task_item 快照；wo_repair 以 (source_type,source_id) 唯一，wo_order 以 repair_id 唯一；mt_record 用 (plan_id,maintain_date) 唯一；wo_spare_record 为不可删除流水；stat_equip_daily 用 (stat_date,equip_id) 唯一日聚合。'],
+        ['并发与事务', '状态流转带旧状态条件，库存扣减带 stock_qty>=quantity 条件；影响行数非1返回409。巡检提交、验收、维保审核、备件领用都以 @Transactional 包住跨表写入，失败整体回滚。'],
+        ['接口输入输出', '统一 /api、JSON camelCase、ApiResponse(code/message/data/traceId)。列表为 pageNum/pageSize 与 PageResult。400 参数错误，401 未认证，403 无权限，404 不存在，409 幂等冲突/唯一冲突/非法状态/并发冲突。'],
+        ['安全与可靠性', 'BCrypt、JWT 刷新轮换、tokenVersion 失效旧 Token、RBAC 加数据范围、操作日志；Redis token 锁加数据库唯一键双保险；文件先上传再绑定，移动端重试沿用 submitNo。']])
 
 def build(spec):
     doc=Document(); style_doc(doc)
     add_title(doc, f'维检云枢 {spec["name"]} 后期考核复习', '系统实现重点版')
     doc.add_paragraph('一 重点考核答案', style='Heading 1')
     add_table(doc, [['考核点', '可直接作答的答案']] + [[a,b] for a,b in spec['summary']])
+    add_public_system_section(doc)
     add_audited_implementation(doc, spec)
     doc.add_page_break()
-    doc.add_paragraph('三 个人负责模块完整复习资料', style='Heading 1')
+    doc.add_paragraph('四 个人负责模块完整复习资料', style='Heading 1')
     md=(Path(__file__).resolve().parent/spec['source']).read_text(encoding='utf-8')
     add_markdown(doc, md)
     doc.save(OUT/spec['out'])
