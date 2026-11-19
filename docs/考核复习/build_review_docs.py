@@ -213,6 +213,11 @@ def style_doc(doc):
     styles['Normal'].paragraph_format.line_spacing = 1.22
     for style_name, size in [('Title', 20), ('Heading 1', 15), ('Heading 2', 12.5), ('Heading 3', 11)]:
         s = styles[style_name]; s.font.name = 'Microsoft YaHei'; s._element.rPr.rFonts.set(qn('w:eastAsia'), 'Microsoft YaHei'); s.font.size = Pt(size); s.font.bold = True; s.font.color.rgb = RGBColor(0,0,0)
+    # python-docx 默认 Title 样式可能携带蓝色下边框；复习资料使用纯文字标题。
+    title_ppr = styles['Title']._element.get_or_add_pPr()
+    title_border = title_ppr.find(qn('w:pBdr'))
+    if title_border is not None:
+        title_ppr.remove(title_border)
     footer = sec.footer.paragraphs[0]; footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r = footer.add_run('维检云枢 后期考核复习资料'); font(r, size=8, color=(90,90,90))
 
@@ -303,25 +308,29 @@ def add_code(doc, title, path, markers):
     for marker in markers[:1]:
         doc.add_paragraph(marker, style='Heading 3')
         lines=extract_method(Path(path), marker, max_lines=140).splitlines()
-        if len(lines) > 22:
-            # 保留入口校验和收口的条件更新/返回，省略逐项字段赋值等重复内容。
-            lines=lines[:14] + ['        // ... 逐项校验、写入明细与关联记录（已省略） ...'] + lines[-7:]
+        if len(lines) > 14:
+            # 代码仅作流程证据：保留入口校验和收口的条件更新/返回，
+            # 逐项字段赋值、循环明细等由紧邻的流程文字说明。
+            lines=lines[:8] + ['        // ... 逐项校验、写入明细与关联记录（已省略） ...'] + lines[-5:]
         code='\n'.join(lines)
         p=doc.add_paragraph(); p.paragraph_format.left_indent=Inches(.12); p.paragraph_format.right_indent=Inches(.08)
         for n, line in enumerate(code.splitlines()):
             r=p.add_run(f'{n+1:>2}  {line}\n'); font(r, name='Consolas', size=7.4)
 
 def add_audited_implementation(doc, spec):
-    doc.add_paragraph('三 个人模块实现 设计 流程与代码证据', style='Heading 1')
-    doc.add_paragraph('本节是个人模块复习主体。每个负责模块的关键流程均完整列出；代码只保留两段最能体现业务处理、事务和并发控制的真实 Service 节选。节选省略重复的逐项赋值，但保留入口校验和条件更新/写入收口。')
-    doc.add_paragraph('3.1 个人负责模块的关键数据库设计', style='Heading 2')
+    doc.add_page_break()
+    doc.add_paragraph('B 个人负责模块完整复习资料', style='Heading 1')
+    doc.add_paragraph(f'{spec["name"]}。本区只讲本人负责模块的实现：表、接口、调用方向、核心业务流程和异常处理。每个负责模块的流程完整保留；代码仅保留两段短节选，用来证明关键校验、条件更新和事务收口。')
+    doc.add_paragraph('B.1 本人模块定位 作用与重要性', style='Heading 2')
+    add_table(doc, [['考核点', '可直接作答的答案']] + [[a,b] for a,b in spec['summary']])
+    doc.add_paragraph('B.2 个人负责模块的关键数据库设计', style='Heading 2')
     add_table(doc, [['表', '关键字段和约束', '设计作用与答题解释']] + spec['tables'])
-    doc.add_paragraph('3.2 接口与输入输出设计能力', style='Heading 2')
+    doc.add_paragraph('B.3 接口与输入输出设计能力', style='Heading 2')
     add_table(doc, [['能力', '实际路径与方法', '输入字段及校验', '输出效果与写入']] + spec['contracts'])
     doc.add_paragraph('回答模板：Controller 用 @Valid 校验 DTO、用 @PreAuthorize 校验权限、从 WjysPrincipal 取操作人；Service 负责状态机与事务；成功统一封装为 ApiResponse<VO>，非法状态、重复提交或并发失败返回 409。')
-    doc.add_paragraph('3.3 与其他模块的调用方向', style='Heading 2')
+    doc.add_paragraph('B.4 本人模块与其他模块的调用方向', style='Heading 2')
     add_table(doc, [['调用方向', '实际调用关系和职责边界']] + spec['calls'])
-    doc.add_paragraph('3.4 核心业务流程 数据处理与紧邻代码支撑', style='Heading 2')
+    doc.add_paragraph('B.5 本人模块核心业务流程 数据处理与关键代码', style='Heading 2')
     code_map={title:(path,markers) for title,path,markers in spec['codes']}
     key_code_titles = {'M05 维保提交与审核服务', 'M06 库存原子扣减与流水服务', 'M02 设备状态条件更新和履历', 'M04 工单派工验收状态机', 'M03 任务生成和幂等提交', 'M03 服务端校验和异常写入'}
     for flow, steps, code_title in spec['flows']:
@@ -332,14 +341,13 @@ def add_audited_implementation(doc, spec):
             add_code(doc, f'关键代码证据：{code_title}', path, markers)
         else:
             p=doc.add_paragraph(); r=p.add_run('实现定位：'); font(r, bold=True); p.add_run(f'{path}；本材料只保留两段关键业务代码，避免代码块淹没复习重点。')
-    doc.add_paragraph('3.5 面试式自测题 标准答案', style='Heading 2')
+    doc.add_paragraph('B.6 面试式自测题 标准答案', style='Heading 2')
     add_table(doc, [['题目', '标准回答']] + spec['qas'])
 
 def add_public_system_section(doc):
-    doc.add_page_break()
-    doc.add_paragraph('二 系统公共复习 项目背景到公共实现能力', style='Heading 1')
-    doc.add_paragraph('这一章是本成员材料内置的系统公共考核答案，不依赖其它文档。先能完整讲清系统，再讲个人负责模块，才能说明个人实现如何嵌入整体。')
-    doc.add_paragraph('2.1 项目背景 目标与面向用户', style='Heading 2')
+    doc.add_paragraph('A 全项目公共复习区 本页内置 考前先过一遍', style='Heading 1')
+    doc.add_paragraph('这是每位成员都应掌握的公共答案，置于个人模块之前且不依赖其它文档。它回答项目背景、用户、模块、全局闭环、架构、公共表设计和异常边界；后续 B 区再深入本人模块的实现。')
+    doc.add_paragraph('A.1 项目背景 目标与面向用户', style='Heading 2')
     doc.add_paragraph('维检云枢面向企业设备运维场景。传统台账、纸质巡检、故障报修和备件领用相互脱节，常见问题是设备状态不一致、异常没有闭环、维修过程不可追溯、库存账实不清。系统以设备为业务主线，把台账、巡检、报修维修、维保、备件和统计接成可审计闭环。')
     add_table(doc, [['用户角色', '主要需求', '系统能力与权限边界'],
         ['系统管理员', '维护账号、角色、菜单、部门、字典与日志', 'M01；管理系统配置，不领取和提交巡检任务'],
@@ -347,7 +355,7 @@ def add_public_system_section(doc):
         ['巡检员', '在现场领取任务、扫码、填写检查项、上传照片和离线提交', 'M03/M08；只能执行分配或领取的任务'],
         ['维修工', '接单、登记维修过程、完工和备件消耗', 'M04/M06；不能越权验收或管理台账'],
         ['企业管理者', '查看设备健康、故障趋势、排行和预警', 'M07；以只读分析为主']])
-    doc.add_paragraph('2.2 功能需求 模块边界与分工', style='Heading 2')
+    doc.add_paragraph('A.2 功能需求 模块边界与分工', style='Heading 2')
     add_table(doc, [['模块', '功能需求和关键产物', '负责人', '直接依赖或被调用关系'],
         ['M01 系统与基础数据', '登录、刷新、用户、角色、菜单、部门、字典、操作日志、数据范围；sys_*', '张万健', '向全部模块提供身份、权限和操作人'],
         ['M02 设备档案', '分类、设备、参数、二维码、状态履历；eq_*', '高浩然', '被 M03/M04/M05 调用；设备状态唯一入口'],
@@ -357,12 +365,12 @@ def add_public_system_section(doc):
         ['M06 备件', '备件台账、预警、库存调整、工单领用和流水；wo_spare*', '郑亮', '以 M04 工单为领用对象，更新工单备件成本'],
         ['M07 看板', '日统计、总览、趋势、Pareto、排行、导出；stat_equip_daily', '张万健', '只读聚合 M02-M06，不能反写业务'],
         ['M08 移动协同', '任务快照、草稿、离线队列、照片、pull/push、消息', '张万健', '调用 M03/M04/M05 公开 Service，不复制业务规则']])
-    doc.add_paragraph('2.3 最主要业务流程及调用方向', style='Heading 2')
+    doc.add_paragraph('A.3 全局业务闭环与调用方向', style='Heading 2')
     doc.add_paragraph('流程一 巡检到维修：M01 鉴权 -> M03 计划按执行时刻生成任务快照 -> 巡检员领取 -> TaskSubmitService 校验完整项、扫码、必拍和阈值 -> 写 ins_abnormal -> AbnormalService 调用 M04 RepairService.createFromAbnormal -> 受理创建 wo_order -> M04 派工/接单/完工/验收 -> M04 调用 M02 EquipmentStatusService 恢复设备 -> M07 聚合故障与停机事实。')
     doc.add_paragraph('流程二 维保到归档：M05 提交 mt_record 和文件绑定 -> 调用 M02 状态服务进入保养中 -> 审核通过推进 mt_plan.next_date 并归档只读，退回后可重提 -> 发现异常时 M05 调用 M04 RepairService.createFromMaintenance。')
     doc.add_paragraph('流程三 工单到备件成本：M04 工单进入允许领用状态 -> M06 SpareConsumptionService 校验工单、备件和数量 -> SQL 条件扣减 wo_spare.stock_qty -> 写 wo_spare_record -> 汇总写 wo_order.spare_cost；撤销通过反向流水回补，不删除历史。')
     doc.add_paragraph('流程四 移动离线：M08 pull 获取任务/消息快照和 cursor -> 页面写草稿和固定 submitNo 队列 -> 照片先留私有目录 -> 联网上传绑定 fileId -> push 逐条复用 M03 提交服务 -> confirmed 清理、409 冲突交人工、网络/5xx 退避。')
-    doc.add_paragraph('2.4 公共架构 数据库与数据处理能力', style='Heading 2')
+    doc.add_paragraph('A.4 公共架构 数据库与异常处理能力', style='Heading 2')
     add_table(doc, [['考察点', '系统实现与可直接回答'],
         ['分层架构', '用户层为 Vue Web 与 UniApp；接入层为 Controller、JWT、@Valid、@PreAuthorize、ApiResponse；业务层为 Service、状态机和 @Transactional；数据层为 Mapper、MySQL/Flyway、Redis/内存 TTL、对象文件元数据。DTO 负责请求校验，VO 负责输出，Entity 不直接做接口入出参。'],
         ['核心数据库设计', 'eq_equipment 以 equip_code 唯一、status/deleted/version 管生命周期；ins_task 用 (plan_id,plan_time) 与 submit_no 双唯一并配 ins_task_item 快照；wo_repair 以 (source_type,source_id) 唯一，wo_order 以 repair_id 唯一；mt_record 用 (plan_id,maintain_date) 唯一；wo_spare_record 为不可删除流水；stat_equip_daily 用 (stat_date,equip_id) 唯一日聚合。'],
@@ -373,8 +381,6 @@ def add_public_system_section(doc):
 def build(spec):
     doc=Document(); style_doc(doc)
     add_title(doc, f'维检云枢 {spec["name"]} 后期考核复习', '系统实现重点版')
-    doc.add_paragraph('一 重点考核答案', style='Heading 1')
-    add_table(doc, [['考核点', '可直接作答的答案']] + [[a,b] for a,b in spec['summary']])
     add_public_system_section(doc)
     add_audited_implementation(doc, spec)
     doc.save(OUT/spec['out'])
