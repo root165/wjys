@@ -19,10 +19,12 @@ async function submit() {
     const response = await login(username.value.trim(), password.value)
     storageRepository.setAuth(response.data)
     const profile = await info()
-    if (!profile.data?.user?.roles?.includes('inspector')) {
+    const roles = profile.data?.user?.roles || []
+    if (!roles.some((role) => ['inspector', 'repairer'].includes(role))) {
       storageRepository.clearAuth()
-      throw new Error('移动端仅供巡检员使用，请使用巡检员账号登录')
+      throw new Error('移动端仅供巡检员或维修工使用，请使用对应账号登录')
     }
+    storageRepository.setUser(profile.data.user)
     uni.reLaunch({ url: '/pages/index/index' })
   } catch (error) {
     errorMessage.value = error.message || '登录失败，请检查网络和账号'

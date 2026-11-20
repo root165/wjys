@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -19,6 +20,7 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -38,7 +40,7 @@ class MobileSyncControllerTests {
         var message = messageService.create(inspectorId, "MOBILE_TEST", "移动提醒", "请处理现场任务", "M08_TEST", 1L);
 
         String pullResponse = mockMvc.perform(get("/api/mobile/sync/pull").header("Authorization", bearer(token)).param("modules", "messages"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.cursor", notNullValue())).andExpect(jsonPath("$.data.tasks.length()").value(0)).andExpect(jsonPath("$.data.messages.length()", greaterThanOrEqualTo(1))).andReturn().getResponse().getContentAsString();
+                .andExpect(status().isOk()).andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store")).andExpect(jsonPath("$.data.cursor", notNullValue())).andExpect(jsonPath("$.data.tasks.length()").value(0)).andExpect(jsonPath("$.data.messages.length()", greaterThanOrEqualTo(1))).andReturn().getResponse().getContentAsString();
         String cursor = objectMapper.readTree(pullResponse).path("data").path("cursor").asText();
         messageService.create(inspectorId, "MOBILE_TEST", "移动增量提醒", "这是游标之后的新消息", "M08_TEST", 2L);
         mockMvc.perform(get("/api/mobile/sync/pull").header("Authorization", bearer(token)).param("cursor", cursor).param("modules", "messages"))

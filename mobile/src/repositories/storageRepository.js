@@ -1,4 +1,5 @@
 const AUTH_KEY = 'wjys:auth:v1'
+const USER_KEY = 'wjys:user:v1'
 const SYNC_INDEX_KEY = 'wjys:sync:v1:index'
 const SYNC_PREFIX = 'wjys:sync:v1:'
 const DRAFT_PREFIX = 'wjys:draft:v1:'
@@ -34,7 +35,7 @@ function write(key, value) {
 }
 
 export const storageRepository = {
-  keys: { AUTH_KEY, SYNC_INDEX_KEY, SYNC_PREFIX, DRAFT_PREFIX, PHOTO_PREFIX, SYNC_CURSOR_KEY, TASK_PREFIX, PHOTO_INDEX_KEY, MESSAGE_CACHE_KEY },
+  keys: { AUTH_KEY, USER_KEY, SYNC_INDEX_KEY, SYNC_PREFIX, DRAFT_PREFIX, PHOTO_PREFIX, SYNC_CURSOR_KEY, TASK_PREFIX, PHOTO_INDEX_KEY, MESSAGE_CACHE_KEY },
   get(key, fallback = null) { return read(key, fallback) },
   set(key, value) { write(key, value) },
   remove(key) { uni.removeStorageSync(key) },
@@ -45,7 +46,9 @@ export const storageRepository = {
   },
   getAuth() { return read(AUTH_KEY, {}) },
   setAuth(value) { write(AUTH_KEY, value) },
-  clearAuth() { uni.removeStorageSync(AUTH_KEY) },
+  getUser() { return read(USER_KEY, null) },
+  setUser(value) { write(USER_KEY, value) },
+  clearAuth() { uni.removeStorageSync(AUTH_KEY); uni.removeStorageSync(USER_KEY) },
   getSyncIndex() { return read(SYNC_INDEX_KEY, []) },
   setSyncIndex(value) { write(SYNC_INDEX_KEY, value) },
   getSyncCursor() { return read(SYNC_CURSOR_KEY, null) },

@@ -60,6 +60,7 @@ wjys:
     enabled: ${SCHEDULING_ENABLED:false}
   inspection:
     daily-generate-cron: ${INSPECTION_DAILY_CRON:0 * * * * *}
+    overdue-grace-minutes: ${INSPECTION_OVERDUE_GRACE_MINUTES:30}
 
 management:
   endpoint:

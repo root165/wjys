@@ -10,6 +10,7 @@ import com.wjys.module.inspection.service.TaskGenerateService;
 import com.wjys.support.lock.InspectionGenerationLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,8 @@ public class InspectionTaskScheduler {
     private final com.wjys.module.inspection.service.PlanService planService;
     private final TaskGenerateService taskGenerateService;
     private final InspectionGenerationLock generationLock;
+    @Value("${wjys.inspection.overdue-grace-minutes:30}")
+    private long overdueGraceMinutes;
 
     @Scheduled(cron = "${wjys.inspection.daily-generate-cron:0 * * * * *}", zone = "Asia/Shanghai")
     public void generateDailyTasks() {
@@ -56,7 +59,7 @@ public class InspectionTaskScheduler {
     private void markOverdue(LocalDate today, LocalTime now) {
         // 逾期判断覆盖已停用计划的历史任务；停用计划不再生成新任务，但不能让已有任务永远停留在待领取/执行中。
         for (InsPlan plan : planMapper.selectList(new LambdaQueryWrapper<>())) {
-            LocalTime cutoff = (plan.getExecuteTime() == null ? LocalTime.of(9, 0) : plan.getExecuteTime()).plusMinutes(30);
+            LocalTime cutoff = (plan.getExecuteTime() == null ? LocalTime.of(9, 0) : plan.getExecuteTime()).plusMinutes(Math.max(0, overdueGraceMinutes));
             List<InsTask> tasks = taskMapper.selectList(new LambdaQueryWrapper<InsTask>()
                     .eq(InsTask::getPlanId, plan.getId())
                     .in(InsTask::getStatus, InspectionTaskStatus.PENDING.getCode(), InspectionTaskStatus.RECEIVED.getCode()));

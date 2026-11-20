@@ -42,7 +42,7 @@ import java.util.Map;
 public class DashboardService {
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
     private static final String CACHE_PREFIX = "wjys:dashboard:";
-    private static final Duration CACHE_TTL = Duration.ofMinutes(10);
+    private static final Duration CACHE_TTL = Duration.ofMinutes(1);
     private final DashboardQueryMapper queryMapper;
     private final StatEquipDailyMapper statMapper;
     private final ObjectMapper objectMapper;

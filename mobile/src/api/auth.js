@@ -12,3 +12,11 @@ export function logout() {
 export function info() {
   return request({ url: '/auth/info' })
 }
+
+export function updateProfile(payload) {
+  return request({ url: '/auth/profile', method: 'PUT', data: payload })
+}
+
+export function changePassword(payload) {
+  return request({ url: '/auth/password', method: 'PUT', data: payload })
+}

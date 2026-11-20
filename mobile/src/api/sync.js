@@ -2,7 +2,7 @@ import { request, upload } from './http.js'
 import { syncQueue } from '../repositories/syncQueue.js'
 
 export function pull(cursor = null, modules = ['inspection', 'messages']) {
-  return request({ url: '/mobile/sync/pull', data: { cursor, modules: modules.join(',') } })
+  return request({ url: '/mobile/sync/pull', data: { cursor, modules: modules.join(','), _ts: Date.now() } })
 }
 
 export function push(items) {

@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { pull } from '../../api/sync.js'
-import { markRead } from '../../api/messages.js'
+import { onPullDownRefresh } from '@dcloudio/uni-app'
+import { list, markRead } from '../../api/messages.js'
 import { storageRepository } from '../../repositories/storageRepository.js'
 
 const messages = ref([])
@@ -11,14 +11,13 @@ const errorMessage = ref('')
 async function load() {
   messages.value = storageRepository.getMessages()
   try {
-    const response = await pull(storageRepository.getSyncCursor(), ['messages'])
-    messages.value = storageRepository.mergeMessages(response.data?.messages || [])
-    if (response.data?.cursor) storageRepository.setSyncCursor(response.data.cursor)
+    const response = await list()
+    messages.value = storageRepository.mergeMessages(response.data || [])
   } catch (error) {
     if (error.statusCode === 403) { storageRepository.clearAuth(); uni.reLaunch({ url: '/pages/login/login' }); return }
     if (!messages.value.length) errorMessage.value = error.message || '消息加载失败'
   }
-  finally { loading.value = false }
+  finally { loading.value = false; uni.stopPullDownRefresh() }
 }
 
 async function read(message) {
@@ -35,6 +34,7 @@ onMounted(() => {
   if (!storageRepository.getAuth()?.accessToken) { uni.reLaunch({ url: '/pages/login/login' }); return }
   load()
 })
+onPullDownRefresh(load)
 </script>
 
 <template>

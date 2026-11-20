@@ -25,3 +25,4 @@ wjys:
     enabled: true
   inspection:
     daily-generate-cron: 0 * * * * *
+    overdue-grace-minutes: 30
